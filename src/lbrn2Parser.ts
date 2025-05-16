@@ -56,16 +56,36 @@ function parseXFormString(xformStr: string): Lbrn2XForm {
   };
 }
 
+function parseControlPointData(cpString: string | undefined): Partial<Pick<Lbrn2Vec2, 'c0x' | 'c0y' | 'c1x' | 'c1y'>> {
+  const data: Partial<Pick<Lbrn2Vec2, 'c0x' | 'c0y' | 'c1x' | 'c1y'>> = {};
+  if (!cpString || !cpString.startsWith('c')) {
+    return data;
+  }
+  // Regex to find c0x, c0y, c1x, c1y and their values
+  // Example: c0x12.3c0y45.6 (key "c0x", value "12.3"; key "c0y", value "45.6")
+  const cpRegex = /(c0x|c0y|c1x|c1y)([-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?)/g;
+  let matchCp: RegExpExecArray | null;
+  while ((matchCp = cpRegex.exec(cpString)) !== null) {
+    const key = matchCp[1] as 'c0x' | 'c0y' | 'c1x' | 'c1y';
+    const value = parseFloat(matchCp[2] ?? "");
+    if (!isNaN(value)) {
+      data[key] = value;
+    }
+  }
+  return data;
+}
+
 function parseVertListString(vertListStr: string): Lbrn2Vec2[] {
   const vertices: Lbrn2Vec2[] = [];
-  const regex = /V\s*([-\d.]+)\s*([-\d.]+)(?:c[^\sV]*)?/g;
+  // Regex to capture V x y and the following c... string until the next V or end of string
+  const regex = /V\s*([-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?)\s*([-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?)([^\sV]*)/g;
   let match: RegExpExecArray | null;
   while ((match = regex.exec(vertListStr)) !== null) {
     const xStr = match[1];
     const yStr = match[2];
-    if (typeof xStr === "string" && typeof yStr === "string") {
-      vertices.push({ x: parseFloat(xStr), y: parseFloat(yStr) });
-    }
+    const cpStr = match[3]; // This will be like "c0x..." or "c..." or empty
+    const controlPoints = parseControlPointData(cpStr);
+    vertices.push({ x: parseFloat(xStr ?? ""), y: parseFloat(yStr ?? ""), ...controlPoints });
   }
   return vertices;
 }
@@ -82,10 +102,17 @@ export function parseLbrn2(xmlString: string): LightBurnProjectFile {
             parsed.LightBurnProject.CutSetting = [parsed.LightBurnProject.CutSetting];
         }
         parsed.LightBurnProject.CutSetting.forEach(cs => {
-            if (cs && (cs as any).index && typeof (cs as any).index.Value === 'number') {
-                cs.index = (cs as any).index.Value;
-            } else if (cs && typeof cs.index === 'number') {
-            } else {
+            if (!cs) return;
+            // Flatten all properties with a single 'Value' key
+            for (const key in cs) {
+                if (Object.prototype.hasOwnProperty.call(cs, key)) {
+                    const val = (cs as any)[key];
+                    if (val && typeof val === 'object' && Object.prototype.hasOwnProperty.call(val, 'Value')) {
+                        if (Object.keys(val).length === 1) {
+                            (cs as any)[key] = val.Value;
+                        }
+                    }
+                }
             }
         });
     } else {
@@ -96,19 +123,29 @@ export function parseLbrn2(xmlString: string): LightBurnProjectFile {
       if (!Array.isArray(parsed.LightBurnProject.Shape)) {
         parsed.LightBurnProject.Shape = [parsed.LightBurnProject.Shape];
       }
-      parsed.LightBurnProject.Shape.forEach(shape => {
+      function parseShapeRecursive(shape: any): any {
         if (shape.XFormVal) {
           shape.XForm = parseXFormString(shape.XFormVal);
         } else if (shape.XForm && typeof shape.XForm === 'string') {
-           shape.XForm = parseXFormString(shape.XForm as unknown as string);
+          shape.XForm = parseXFormString(shape.XForm as unknown as string);
         }
 
         if (shape.Type === "Path") {
           if (shape.VertList && typeof shape.VertList === 'string') {
             shape.parsedVerts = parseVertListString(shape.VertList);
           }
+        } else if (shape.Type === "Group" && shape.Children) {
+          // Children can be a single shape or array
+          let childrenArr = shape.Children.Shape;
+          if (!Array.isArray(childrenArr)) {
+            childrenArr = [childrenArr];
+          }
+          shape.Children = childrenArr.map(parseShapeRecursive);
         }
-      });
+        return shape;
+      }
+
+      parsed.LightBurnProject.Shape = parsed.LightBurnProject.Shape.map(parseShapeRecursive);
     } else {
       parsed.LightBurnProject.Shape = [];
     }

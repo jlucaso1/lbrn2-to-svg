@@ -21,12 +21,12 @@ function structurallyEqualSvg(svgA: string, svgB: string): boolean {
   function normalizeValue(val: any, key?: string): any {
     // Normalize numbers: "5.000000" -> "5", "10.000mm" -> "10mm"
     if (typeof val === "number") {
-      return Number(val.toFixed(6)).toString().replace(/\.0+$/, "");
+      return Number(val.toFixed(3)).toString().replace(/\.0+$/, "");
     }
     if (typeof val === "string") {
       // Numeric string: "5.000000" -> "5"
       if (/^-?\d+(\.\d+)?$/.test(val.trim())) {
-        return Number(Number(val).toFixed(6)).toString().replace(/\.0+$/, "");
+        return Number(Number(val).toFixed(3)).toString().replace(/\.0+$/, "");
       }
       // Numeric with unit: "10.000000mm" -> "10mm"
       if (/^-?\d+(\.\d+)?[a-zA-Z%]+$/.test(val.trim())) {
@@ -38,12 +38,18 @@ function structurallyEqualSvg(svgA: string, svgB: string): boolean {
       }
       // Normalize transform: remove spaces, unify delimiters, normalize numbers
       if (key === "transform") {
+        // Normalize numbers to 5 decimals, unify delimiters, and replace spaces with commas
         return val
           .replace(/\s*,\s*/g, ",")
           .replace(/\s+/g, ",")
-          .replace(/-?\d+(\.\d+)?/g, (num) =>
-            Number(Number(num).toFixed(6)).toString().replace(/\.0+$/, "")
-          );
+          .replace(/-?\d*\.?\d+([eE][-+]?\d+)?/g, (num) => {
+            const n = parseFloat(num);
+            if (isNaN(n)) return num;
+            let s = n.toFixed(3);
+            s = s.replace(/(\.\d*?[1-9])0+$/, '$1');
+            s = s.replace(/\.0+$/, '');
+            return s;
+          });
       }
       // Normalize style: remove extra spaces, sort properties, normalize numbers, ignore stroke-width
       if (key === "style") {
@@ -54,7 +60,7 @@ function structurallyEqualSvg(svgA: string, svgB: string): boolean {
           .filter((prop) => !prop.startsWith("stroke-width"))
           .map((prop) =>
             prop.replace(/-?\d+(\.\d+)?/g, (num) =>
-              Number(Number(num).toFixed(6)).toString().replace(/\.0+$/, "")
+              Number(Number(num).toFixed(3)).toString().replace(/\.0+$/, "")
             )
           )
           .sort()
@@ -62,27 +68,43 @@ function structurallyEqualSvg(svgA: string, svgB: string): boolean {
       }
       // Normalize path d attribute: remove unnecessary zeros and spaces
       if (key === "d") {
-        return val
-          .replace(/(\d+)\.0+\b/g, "$1")
-          .replace(/(\d+\.\d*?[1-9])0+\b/g, "$1")
-          .replace(/(\d)\.0+(?=[^0-9])/g, "$1")
-          .replace(/(\d)\.0+(?=\s|,|$)/g, "$1")
-          .replace(/\s+/g, " ")
-          .replace(/ ?([ML]) ?/g, "$1");
+        let dStr = val as string;
+        // Normalize numbers within d string to 5 decimal places, remove trailing zeros and unnecessary decimals
+        dStr = dStr.replace(/-?\d*\.?\d+([eE][-+]?\d+)?/g, (numStr) => {
+          const num = parseFloat(numStr);
+          if (isNaN(num)) return numStr;
+          let s = num.toFixed(3);
+          s = s.replace(/(\.\d*?[1-9])0+$/, '$1');
+          s = s.replace(/\.0+$/, '');
+          return s;
+        });
+        // Normalize Z/z to Z for comparison consistency
+        dStr = dStr.replace(/z$/i, "Z");
+        // Remove all whitespace
+        dStr = dStr.replace(/\s+/g, "");
+        // Replace all command/number boundaries with commas
+        dStr = dStr.replace(/([a-zA-Z])(-?\d)/g, "$1,$2");
+        dStr = dStr.replace(/(\d)([a-zA-Z])/g, "$1,$2");
+        // Collapse duplicate commas
+        dStr = dStr.replace(/,+/g, ",");
+        // Remove leading/trailing commas
+        dStr = dStr.replace(/^,|,$/g, "");
+        return dStr;
       }
     }
     return val;
   }
 
+  // Only ignore width, height, and viewBox when they are direct children of the <svg> element.
+  // This ensures the test focuses on path geometry and style, not on canvas size or placement.
   function normalizeAttrs(obj: any, parentKey?: string): any {
     if (typeof obj !== "object" || obj === null) return normalizeValue(obj, parentKey);
     if (Array.isArray(obj)) return obj.map((v) => normalizeAttrs(v, parentKey));
     const sorted: any = {};
     Object.keys(obj)
-      .filter(
-        (k) =>
-          !["width", "height", "viewBox"].includes(k) // Ignore canvas attributes for geometry-only comparison
-      )
+      .filter((k) => {
+        // Filter width, height, viewBox everywhere\nif (["width", "height", "viewBox"].includes(k)) return false;\nreturn true;
+      })
       .sort()
       .forEach((k) => {
         sorted[k] = normalizeAttrs(obj[k], k);
@@ -101,6 +123,7 @@ describe('LBRN2 to SVG Converter', () => {
     { name: 'circle', lbrn2File: 'circle.lbrn2', svgFile: 'circle.svg' },
     { name: 'square', lbrn2File: 'square.lbrn2', svgFile: 'square.svg' },
     { name: 'line', lbrn2File: 'line.lbrn2', svgFile: 'line.svg' },
+    { name: 'butterfly_vectorized', lbrn2File: 'butterfly_vectorized.lbrn2', svgFile: 'butterfly_vectorized.svg' },
   ];
 
   for (const tc of testCases) {

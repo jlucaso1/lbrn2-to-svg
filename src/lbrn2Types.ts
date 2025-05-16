@@ -1,6 +1,10 @@
 export interface Lbrn2Vec2 {
   x: number;
   y: number;
+  c0x?: number; // Control point 0 x (for curve leaving this vertex)
+  c0y?: number; // Control point 0 y
+  c1x?: number; // Control point 1 x (for curve arriving at this vertex)
+  c1y?: number; // Control point 1 y
 }
 
 export interface Lbrn2XForm {
@@ -47,7 +51,12 @@ export interface Lbrn2Path extends Lbrn2ShapeBase {
   // Further parsed PrimList structure could be added
 }
 
-export type Lbrn2Shape = Lbrn2Rect | Lbrn2Ellipse | Lbrn2Path;
+export interface Lbrn2Group extends Lbrn2ShapeBase {
+  Type: "Group";
+  Children: Lbrn2Shape[];
+}
+
+export type Lbrn2Shape = Lbrn2Rect | Lbrn2Ellipse | Lbrn2Path | Lbrn2Group;
 
 export interface LightBurnProjectFile {
   LightBurnProject: {

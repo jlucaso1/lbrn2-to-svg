@@ -44,8 +44,19 @@ Key Child Elements of `<LightBurnProject>`:
             *   Attributes: `Rx` (radius in X), `Ry` (radius in Y).
             *   The ellipse is typically defined centered at the local origin (0,0) before `<XForm>` is applied.
         *   For `Type="Path"`:
-            *   Child Element `<VertList>`: A string defining vertices. Example: `V<x0> <y0>c...V<x1> <y1>c...`. Each `V<x> <y>` defines a point. The `c...` parts might contain control point data or other metadata, their exact parsing depends on complexity. For simple lines, `V<x> <y>` is primary.
-            *   Child Element `<PrimList>`: A string defining primitives connecting vertices from `VertList`. Example: `L<idx0> <idx1>` defines a line from vertex `idx0` to vertex `idx1`. Other primitives (e.g., for curves) may exist.
+            *   Child Element `<VertList>`: A string defining vertices and their control points for curves.
+                *   Example: `V<x0> <y0>c0x<cx0_0>c0y<cy0_0>c1x<cx1_0>c1y<cy1_0>V<x1> <y1>c0x<cx0_1>c0y<cy0_1>c1x<cx1_1>c1y<cy1_1>...`
+                *   Each `V<x> <y>` defines an anchor point of a vertex.
+                *   The string immediately following `V<x> <y>` (until the next `V` or end of `VertList`) is the control point data string for that vertex. It's typically prefixed with `c`.
+                *   This control point data string is parsed for key-value pairs like `c0x<val>`, `c0y<val>`, `c1x<val>`, `c1y<val>`.
+                    *   `(c0x, c0y)`: Control point for the curve segment *leaving* this vertex (i.e., "control point 1" if this vertex is the start of a segment).
+                    *   `(c1x, c1y)`: Control point for the curve segment *arriving* at this vertex (i.e., "control point 2" if this vertex is the end of a segment).
+            *   Child Element `<PrimList>`: A string defining geometric primitives using indices into the parsed `VertList`. Primitives are concatenated without spaces, e.g., `L0 1B1 2`.
+                *   `L<idx0> <idx1>`: A line segment from `VertList[idx0]` to `VertList[idx1]`.
+                *   `B<idx0> <idx1>`: A cubic Bezier curve segment from `VertList[idx0]` to `VertList[idx1]`.
+                    *   It uses `(VertList[idx0].c0x, VertList[idx0].c0y)` as the first control point.
+                    *   It uses `(VertList[idx1].c1x, VertList[idx1].c1y)` as the second control point.
+                *   Other primitives like `Q` (quadratic Bezier) or `C` (alternative cubic) might exist.
 *   `<Notes>`: (User notes, can be ignored for geometry)
 
 Example Structure (derived from `square.lbrn2` artifact):
@@ -92,8 +103,8 @@ Shape Representation in Detail:
       This represents a circle with radius 5, centered at (55,55).
 
 *   **Path (`Type="Path"`)**:
-    *   `<VertList>`: Contains vertex data. `V<x> <y>` specifies a vertex. Example: `V49 48c0x1c1x49c1y48V62 63c0x62c0y63c1x1`. This defines two vertices: (49,48) and (62,63). The `c...` data may be ignored for simple line primitives or used for curve control points with corresponding curve primitives.
-    *   `<PrimList>`: Defines geometric primitives using indices into the parsed `VertList`. Example: `L0 1` means a line segment from the 0th vertex to the 1st vertex.
+    *   `<VertList>`: Contains vertex data. `V<x> <y>` specifies a vertex. Example: `V49 48c0x1c1x49c1y48V62 63c0x62c0y63c1x1`. This defines two vertices: (49,48) and (62,63). The `c...` data string is parsed for control points like `c0x`, `c0y`, `c1x`, `c1y`.
+    *   `<PrimList>`: Defines geometric primitives using indices into the parsed `VertList`. Example: `L0 1` means a line segment from the 0th vertex to the 1st vertex. `B0 1` means a Bezier curve from vertex 0 to vertex 1, using control points defined in their respective `VertList` entries.
 
 Parsing Considerations
 
@@ -108,7 +119,8 @@ Key Steps for Geometric Conversion:
     *   If `Type="Path"`, parse `<VertList>` into an array of coordinate pairs and `<PrimList>` into a sequence of drawing commands.
 
 Challenges:
-*   The exact meaning of all `c...` data in `<VertList>` and all possible `PrimList` commands would require more extensive reverse-engineering or documentation. For common shapes and lines, parsing is feasible.
+*   The exact meaning of all possible key-value pairs in the `c...` data string within `<VertList>` and all possible `PrimList` commands (e.g., `Q`, `C` if they differ from `B`) would require more extensive reverse-engineering or documentation.
+*   The current implementation focuses on `L` (line) and `B` (cubic Bezier) primitives, and `c0x,c0y,c1x,c1y` control point keys.
 
 SVG Specification Overview
 (This part of the original document is largely accurate and can be kept as is, focusing on standard SVG elements like `<rect>`, `<circle>`, `<path>`, `<svg>`, transformations, etc.)
@@ -139,6 +151,8 @@ LBRN2 to SVG:
     *   LBRN2 `<Shape Type="Path">` to SVG `<path>`.
         *   Parse `VertList` and `PrimList`.
         *   `L<idx0> <idx1>` in `PrimList` becomes `M vert[idx0].x,vert[idx0].y L vert[idx1].x,vert[idx1].y` in SVG path data `d` (if it's the start of a subpath, otherwise just `L`).
+        *   `B<idx0> <idx1>` in `PrimList` becomes `C vert[idx0].c0x,vert[idx0].c0y vert[idx1].c1x,vert[idx1].c1y vert[idx1].x,vert[idx1].y` in SVG path data `d`. (Prepended with `M` if it's the start of a subpath).
+        *   If a path closes on itself (e.g. last primitive's endpoint is the first primitive's start point), a `Z` is appended to the SVG path data.
 3.  **SVG Structure**:
     *   An overall `<svg>` tag with `width`, `height`, and `viewBox`.
     *   The `viewBox` should encompass all transformed shapes. For single shapes from artifacts (e.g., centered at `(e,f)` from XForm, with dimensions `W,H`):
