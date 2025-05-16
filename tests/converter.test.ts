@@ -125,20 +125,20 @@ function structurallyEqualSvg(svgA: string, svgB: string): boolean {
 
 describe("LBRN2 to SVG Converter", () => {
   const testCases = [
-    { name: "circle", lbrn2File: "circle.lbrn2", svgFile: "circle.svg" },
-    { name: "square", lbrn2File: "square.lbrn2", svgFile: "square.svg" },
-    { name: "line", lbrn2File: "line.lbrn2", svgFile: "line.svg" },
-    {
-      name: "butterfly_vectorized",
-      lbrn2File: "butterfly_vectorized.lbrn2",
-      svgFile: "butterfly_vectorized.svg",
-    },
+    "circle",
+    "square",
+    "line",
+    "butterfly_vectorized",
+    "ellipse_stretched",
+    "bezier_missing_cp",
+    "group_empty",
+    "group_single_child",
   ];
 
   for (const tc of testCases) {
-    test(`should convert ${tc.name}.lbrn2 to ${tc.name}.svg`, () => {
-      const lbrn2Path = path.join(artifactsDir, tc.lbrn2File);
-      const expectedSvgPath = path.join(artifactsDir, tc.svgFile);
+    test(`should convert ${tc}.lbrn2 to ${tc}.svg`, () => {
+      const lbrn2Path = path.join(artifactsDir, `${tc}.lbrn2`);
+      const expectedSvgPath = path.join(artifactsDir, `${tc}.svg`);
 
       const lbrn2Content = fs.readFileSync(lbrn2Path, "utf-8");
       const expectedSvgContent = fs.readFileSync(expectedSvgPath, "utf-8");
