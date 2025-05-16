@@ -101,6 +101,7 @@ function shapeToSvgElement(
         ).join("\n    ");
         return `<g transform="${transform}">\n    ${groupContent}\n</g>`;
       }
+      return "";
     }
     default:
       log.push(`Unsupported shape type: ${(shape as any).Type}`);

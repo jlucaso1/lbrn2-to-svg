@@ -142,10 +142,28 @@ function parsePrimListToIR(primListStr: string): PathPrimitiveIR[] {
         break;
       }
     }
-    if (type === "L" && args.length === 2 && args[0] !== undefined && args[1] !== undefined) {
-      primitives.push({ type: "Line", startIdx: args[0] as number, endIdx: args[1] as number });
-    } else if (type === "B" && args.length === 2 && args[0] !== undefined && args[1] !== undefined) {
-      primitives.push({ type: "Bezier", startIdx: args[0] as number, endIdx: args[1] as number });
+    if (
+      type === "L" &&
+      args.length === 2 &&
+      args[0] !== undefined &&
+      args[1] !== undefined
+    ) {
+      primitives.push({
+        type: "Line",
+        startIdx: args[0] as number,
+        endIdx: args[1] as number,
+      });
+    } else if (
+      type === "B" &&
+      args.length === 2 &&
+      args[0] !== undefined &&
+      args[1] !== undefined
+    ) {
+      primitives.push({
+        type: "Bezier",
+        startIdx: args[0] as number,
+        endIdx: args[1] as number,
+      });
     }
     // Extend for Q, C, etc. as needed
   }
@@ -291,7 +309,7 @@ export function parseLbrn2(xmlString: string): LightBurnProjectFile {
       if (!Array.isArray(parsed.LightBurnProject.Shape)) {
         parsed.LightBurnProject.Shape = [parsed.LightBurnProject.Shape];
       }
-      function parseShapeRecursive(shape: any): any {
+      const parseShapeRecursive = (shape: any): any => {
         if (shape.XFormVal) {
           shape.XForm = parseXFormString(shape.XFormVal);
         } else if (shape.XForm && typeof shape.XForm === "string") {
@@ -325,7 +343,7 @@ export function parseLbrn2(xmlString: string): LightBurnProjectFile {
           shape.Children = childrenArr.map(parseShapeRecursive);
         }
         return shape;
-      }
+      };
 
       parsed.LightBurnProject.Shape =
         parsed.LightBurnProject.Shape.map(parseShapeRecursive);

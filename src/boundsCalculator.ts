@@ -69,7 +69,8 @@ export function getTransformedBounds(
 
   if (shape.Type === "Rect") {
     const rect = shape as Lbrn2Rect;
-    const w = rect.W / 2, h = rect.H / 2;
+    const w = rect.W / 2,
+      h = rect.H / 2;
     pointsToBound.push(
       { x: -w, y: -h },
       { x: w, y: -h },
@@ -102,7 +103,7 @@ export function getTransformedBounds(
     let i = 0;
     const primList = path.PrimList;
     const len = primList.length;
-    function parseNextInt(): number | null {
+    const parseNextInt = (): number | null => {
       while (i < len && /\s/.test(primList[i] ?? "")) i++;
       let numStr = "";
       while (i < len && /[0-9]/.test(primList[i] ?? "")) {
@@ -110,7 +111,7 @@ export function getTransformedBounds(
         i++;
       }
       return numStr.length > 0 ? Number(numStr) : null;
-    }
+    };
     while (i < len) {
       while (i < len && /\s/.test(primList[i] ?? "")) i++;
       if (i >= len) break;

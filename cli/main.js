@@ -1,10 +1,8 @@
-#!/usr/bin/env bun
 import { readFileSync, writeFileSync } from "fs";
-import { parseLbrn2 } from "./lbrn2Parser";
-import { lbrn2ToSvg } from "./svgConverter";
+import { lbrn2ToSvg, parseLbrn2 } from "../dist/index.js";
 
 function printUsage() {
-  console.log("Usage: bun src/cli.ts <input.lbrn2> <output.svg>");
+  console.log("Usage: <input.lbrn2> <output.svg>");
 }
 
 function main() {
@@ -18,7 +16,7 @@ function main() {
     printUsage();
     process.exit(1);
   }
-  let xml: string;
+  let xml;
   try {
     xml = readFileSync(inputPath, "utf-8");
   } catch (e) {
@@ -32,7 +30,7 @@ function main() {
     console.error("Failed to parse LBRN2 file:", e);
     process.exit(3);
   }
-  let svg: string;
+  let svg;
   try {
     svg = lbrn2ToSvg(project);
   } catch (e) {
