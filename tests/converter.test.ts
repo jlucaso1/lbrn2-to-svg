@@ -8,6 +8,11 @@ const artifactsDir = path.join(import.meta.dir, "artifacts");
 
 import { XMLParser } from "fast-xml-parser";
 
+const tempDir = path.join(import.meta.dir, "temp");
+if (!fs.existsSync(tempDir)) {
+  fs.mkdirSync(tempDir);
+}
+
 // Helper to compare SVGs structurally (ignoring attribute order and formatting)
 function structurallyEqualSvg(svgA: string, svgB: string): boolean {
   const parser = new XMLParser({
@@ -135,6 +140,7 @@ describe("LBRN2 to SVG Converter", () => {
     "group_single_child",
     "word",
     "image",
+    "crucifix",
   ];
 
   for (const tc of testCases) {
@@ -169,6 +175,10 @@ describe("LBRN2 to SVG Converter", () => {
       }
 
       expect(structurallyEqualSvg(generatedSvg, expectedSvgContent)).toBe(true);
+
+      // save to tests/temp/ for debugging
+      const tempSvgPath = path.join(tempDir, `${tc}.svg`);
+      fs.writeFileSync(tempSvgPath, generatedSvg);
     });
   }
 });

@@ -30,6 +30,8 @@ export interface Lbrn2ShapeBase {
   CutIndex: number;
   XFormVal: string; // Raw XForm string "a b c d e f"
   XForm?: Lbrn2XForm; // Parsed XForm
+  VertID?: number; // Vertex list identifier (for geometry reuse)
+  PrimID?: number; // Primitive list identifier (for geometry reuse)
 }
 
 export interface Lbrn2Rect extends Lbrn2ShapeBase {
@@ -77,7 +79,12 @@ export interface Lbrn2Bitmap extends Lbrn2ShapeBase {
   SourceHash?: number;
 }
 
-export type Lbrn2Shape = Lbrn2Rect | Lbrn2Ellipse | Lbrn2Path | Lbrn2Group | Lbrn2Bitmap;
+export type Lbrn2Shape =
+  | Lbrn2Rect
+  | Lbrn2Ellipse
+  | Lbrn2Path
+  | Lbrn2Group
+  | Lbrn2Bitmap;
 
 export interface LightBurnProjectFile {
   LightBurnProject: {
@@ -94,6 +101,5 @@ export interface LightBurnProjectFile {
  */
 export type PathPrimitiveIR =
   | { type: "Line"; startIdx: number; endIdx: number }
-  | { type: "Bezier"; startIdx: number; endIdx: number }
-  // Extend with more types as needed (Quadratic, Cubic, etc.)
-  ;
+  | { type: "Bezier"; startIdx: number; endIdx: number };
+// Extend with more types as needed (Quadratic, Cubic, etc.)

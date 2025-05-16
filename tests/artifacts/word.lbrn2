@@ -1,9 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <LightBurnProject AppVersion="1.7.08" DeviceName="JCZFiber (LMC4)" FormatVersion="1" MaterialHeight="0" MirrorX="False" MirrorY="False">
-  <CutSetting type="Cut">
-    <index Value="0"/>
-    <name Value="C00"/>
-  </CutSetting>
   <Shape Type="Text" CutIndex="0" Font="Sans Serif,-1,100,5,50,0,0,0,0,0" Str="jlucaso" H="10" LS="0" LnS="0" Ah="1" Av="1" Weld="1" HasBackupPath="1">
     <BackupPath Type="Path" CutIndex="0">
       <XForm>1 0 0 1 55.647533 59.200882</XForm>

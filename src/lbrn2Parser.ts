@@ -276,6 +276,17 @@ export function parseLbrn2(xmlString: string): LightBurnProjectFile {
   }
   const parsed = parser.parse(xmlString) as LightBurnProjectFile;
 
+  // Cache for path definitions (VertList, PrimList, and their parsed counterparts)
+  const pathDefinitionCache = new Map<
+    string,
+    {
+      VertList: string;
+      PrimList: string;
+      parsedVerts?: Lbrn2Vec2[];
+      parsedPrimitives?: PathPrimitiveIR[];
+    }
+  >();
+
   if (parsed.LightBurnProject) {
     if (parsed.LightBurnProject.CutSetting) {
       if (!Array.isArray(parsed.LightBurnProject.CutSetting)) {
@@ -309,7 +320,12 @@ export function parseLbrn2(xmlString: string): LightBurnProjectFile {
       if (!Array.isArray(parsed.LightBurnProject.Shape)) {
         parsed.LightBurnProject.Shape = [parsed.LightBurnProject.Shape];
       }
-      const parseShapeRecursive = (shape: any): any => {
+
+      // Define parseShapeRecursive to accept the cache
+      const parseShapeRecursive = (
+        shape: any,
+        cache: typeof pathDefinitionCache
+      ): any => {
         // Handle Text with BackupPath: substitute Text shape with Path from BackupPath
         if (
           shape.Type === "Text" &&
@@ -336,62 +352,131 @@ export function parseLbrn2(xmlString: string): LightBurnProjectFile {
           };
         }
 
-        // Parse XForm for current shape
+        // Handle Path definition and reuse
+        if (shape.Type === "Path") {
+          // VertID and PrimID should be parsed as numbers by fast-xml-parser due to parseAttributeValue: true
+          // If they are strings, ensure conversion:
+          if (shape.VertID !== undefined && typeof shape.VertID === "string") {
+            shape.VertID = parseInt(String(shape.VertID), 10);
+          }
+          if (shape.PrimID !== undefined && typeof shape.PrimID === "string") {
+            shape.PrimID = parseInt(String(shape.PrimID), 10);
+          }
+
+          const cacheKey =
+            shape.VertID !== undefined && shape.PrimID !== undefined
+              ? `${shape.VertID}_${shape.PrimID}`
+              : null;
+
+          if (
+            shape.VertList &&
+            typeof shape.VertList === "string" &&
+            shape.PrimList &&
+            typeof shape.PrimList === "string"
+          ) {
+            // This shape defines the path geometry
+            shape.parsedVerts = parseVertListString(shape.VertList);
+            shape.parsedPrimitives = parsePrimListToIR(shape.PrimList);
+
+            if (cacheKey) {
+              cache.set(cacheKey, {
+                VertList: shape.VertList,
+                PrimList: shape.PrimList,
+                parsedVerts: shape.parsedVerts,
+                parsedPrimitives: shape.parsedPrimitives,
+              });
+            }
+          } else if (cacheKey) {
+            // This shape reuses a definition
+            const cachedDef = cache.get(cacheKey);
+            if (cachedDef) {
+              shape.VertList = cachedDef.VertList;
+              shape.PrimList = cachedDef.PrimList;
+              shape.parsedVerts = cachedDef.parsedVerts;
+              shape.parsedPrimitives = cachedDef.parsedPrimitives;
+            } else {
+              console.warn(
+                `Path definition for VertID=${shape.VertID}, PrimID=${
+                  shape.PrimID
+                } not found in cache. Shape will be empty or invalid: ${JSON.stringify(
+                  shape
+                )}`
+              );
+              shape.parsedVerts = [];
+              shape.parsedPrimitives = [];
+            }
+          } else {
+            // Path shape without VertList/PrimList AND without a valid cacheKey for reuse.
+            if (!shape.VertList && !shape.PrimList) {
+              console.warn(
+                `Path shape is missing VertList/PrimList and VertID/PrimID for reuse. Treating as empty: ${JSON.stringify(
+                  shape
+                )}`
+              );
+              shape.parsedVerts = [];
+              shape.parsedPrimitives = [];
+            }
+          }
+        }
+
+        // Parse XForm for current shape (after potential geometry population from cache/BackupPath)
         if (shape.XFormVal) {
           shape.XForm = parseXFormString(shape.XFormVal);
         } else if (shape.XForm && typeof shape.XForm === "string") {
           shape.XForm = parseXFormString(shape.XForm as unknown as string);
         }
 
-        if (shape.Type === "Path") {
-          if (shape.VertList && typeof shape.VertList === "string") {
-            shape.parsedVerts = parseVertListString(shape.VertList);
-          }
-          if (shape.PrimList && typeof shape.PrimList === "string") {
-            shape.parsedPrimitives = parsePrimListToIR(shape.PrimList);
-          }
-          // Skip Path shapes without XForm
-          if (!shape.XForm) return null;
-        } else if (shape.Type === "Group" && shape.Children) {
+        if (shape.Type === "Group" && shape.Children) {
           // Children can be a single shape, array, or { Shape: ... }
           let childrenArr: any[] = [];
           if (Array.isArray(shape.Children)) {
-            // Already an array (shouldn't happen in LBRN2, but handle gracefully)
             childrenArr = shape.Children;
           } else if (shape.Children.Shape !== undefined) {
-            // Standard LBRN2: Children.Shape is single or array
             if (Array.isArray(shape.Children.Shape)) {
               childrenArr = shape.Children.Shape;
             } else {
               childrenArr = [shape.Children.Shape];
             }
           } else if (shape.Children) {
-            // Fallback: treat as single child
             childrenArr = [shape.Children];
           }
-          shape.Children = childrenArr.map(parseShapeRecursive).filter(Boolean); // Remove null children
-          // Skip Group shapes without XForm
-          if (!shape.XForm) return null;
-        } else if (
-          (shape.Type === "Rect" || shape.Type === "Ellipse") &&
-          !shape.XForm
-        ) {
-          // Skip basic shapes without XForm
-          return null;
-        } else if (shape.Type === "Text") {
-          // If it's still a Text shape, it means no usable BackupPath; let SVG converter skip it.
+          shape.Children = childrenArr
+            .map((child) => parseShapeRecursive(child, cache))
+            .filter(Boolean); // Pass cache
         }
 
-        // Ensure all non-Text shapes have a parsed XForm
+        // Ensure all non-Text shapes that are not Groups being emptied have a parsed XForm
+        // or are otherwise valid.
         if (shape.Type !== "Text" && !shape.XForm) {
-          return null;
+          // A Group might legitimately not have an XForm if it's an identity transform at the root,
+          // but its children will. For other shapes, XForm is essential.
+          // If a Path lost its geometry and has no XForm, it's definitely skippable.
+          if (
+            shape.Type === "Path" &&
+            (!shape.parsedVerts || shape.parsedVerts.length === 0)
+          ) {
+            return null; // Skip paths that ended up with no geometry
+          }
+          if (shape.Type !== "Group") {
+            // Groups might be containers
+            console.warn(
+              `Shape type ${
+                shape.Type
+              } is missing XForm, may not render correctly or be skipped: ${JSON.stringify(
+                shape
+              )}`
+            );
+            // Returning null for non-Group, non-Text shapes without XForm:
+            return null;
+          }
         }
 
         return shape;
       };
 
-      parsed.LightBurnProject.Shape =
-        parsed.LightBurnProject.Shape.map(parseShapeRecursive);
+      parsed.LightBurnProject.Shape = parsed.LightBurnProject.Shape.map(
+        (shape) => parseShapeRecursive(shape, pathDefinitionCache)
+      ).filter(Boolean); // Remove null shapes
     } else {
       parsed.LightBurnProject.Shape = [];
     }

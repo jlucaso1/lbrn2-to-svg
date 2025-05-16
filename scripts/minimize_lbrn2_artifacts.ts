@@ -14,6 +14,7 @@ const elementsToRemoveFromRoot: string[] = [
   "VariableText",
   "UIPrefs",
   "Notes",
+  "CutSetting",
   "CutSetting_Img",
 ];
 
