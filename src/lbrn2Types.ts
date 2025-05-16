@@ -19,6 +19,8 @@ export interface Lbrn2XForm {
 export interface Lbrn2CutSetting {
   index: number;
   name: string;
+  color?: string; // Optional color property for styling
+  strokeWidth?: string; // Optional stroke width for styling
   // Add other relevant properties if needed for styling, e.g. color
   // For now, we mostly care about the index to link shapes.
 }

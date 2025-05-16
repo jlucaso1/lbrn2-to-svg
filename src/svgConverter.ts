@@ -11,6 +11,12 @@ import type {
 
 const F = (n: number) => n.toFixed(6);
 
+// Primitive type constants for PrimList
+const PRIM_LINE = "L";
+const PRIM_BEZIER = "B";
+const PRIM_QUADRATIC = "Q";
+const PRIM_CUBIC = "C";
+
 // Default color palette for layers if CutSetting has no color
 const DEFAULT_COLORS = [
   "#000000",
@@ -39,8 +45,8 @@ function getCutSettingStyle(
   const cs = cutSettings.find((cs) => cs.index === cutIndex);
   let color = "#000000";
   let strokeWidth = "0.050000mm";
-  if (cs && (cs as any).color) {
-    color = (cs as any).color;
+  if (cs && cs.color) {
+    color = cs.color;
   } else if (cs) {
     const paletteIdx =
       typeof cs.index === "number" && cs.index >= 0
@@ -48,9 +54,9 @@ function getCutSettingStyle(
         : 0;
     color = DEFAULT_COLORS[paletteIdx] || "#000000";
   }
-  // Special case for butterfly_vectorized: match expected test value
-  if (cs && cs.name === "C00") {
-    strokeWidth = "1.052682mm";
+  // Use strokeWidth from cut setting if present
+  if (cs && cs.strokeWidth) {
+    strokeWidth = cs.strokeWidth;
   }
   return `stroke:${color};stroke-width:${strokeWidth};fill:none`;
 }
@@ -62,16 +68,21 @@ function tokenizePrimList(primList: string): PrimToken[] {
   const tokens: PrimToken[] = [];
   let i = 0;
   const len = primList.length;
+
+  function parseNextInt(): number | null {
+    // Skip whitespace
+    while (i < len && /\s/.test(primList[i] ?? "")) i++;
+    let numStr = "";
+    while (i < len && /[0-9]/.test(primList[i] ?? "")) {
+      numStr += primList[i];
+      i++;
+    }
+    return numStr.length > 0 ? Number(numStr) : null;
+  }
+
   while (i < len) {
     // Skip whitespace
-    while (i < len) {
-      const ch = primList[i];
-      if (ch !== undefined && /\s/.test(ch)) {
-        i++;
-      } else {
-        break;
-      }
-    }
+    while (i < len && /\s/.test(primList[i] ?? "")) i++;
     if (i >= len) break;
     const type = primList[i];
     if (type === undefined || !/[A-Za-z]/.test(type)) {
@@ -81,31 +92,10 @@ function tokenizePrimList(primList: string): PrimToken[] {
     i++;
     // Parse up to 4 integer arguments (indices)
     const args: number[] = [];
-    let argCount = 0;
-    while (argCount < 4) {
-      // Skip whitespace
-      while (i < len) {
-        const ch = primList[i];
-        if (ch !== undefined && /\s/.test(ch)) {
-          i++;
-        } else {
-          break;
-        }
-      }
-      // Parse number
-      let numStr = "";
-      while (i < len) {
-        const ch = primList[i];
-        if (ch !== undefined && /[0-9]/.test(ch)) {
-          numStr += ch;
-          i++;
-        } else {
-          break;
-        }
-      }
-      if (numStr.length > 0) {
-        args.push(Number(numStr));
-        argCount++;
+    for (let argCount = 0; argCount < 4; argCount++) {
+      const num = parseNextInt();
+      if (num !== null) {
+        args.push(num);
       } else {
         break;
       }
@@ -136,7 +126,7 @@ function parsePathPrimitives(path: Lbrn2Path, log: string[]): string {
     const primType = token.type;
     const args = token.args;
 
-    if (primType === "L") {
+    if (primType === PRIM_LINE) {
       if (args.length !== 2) {
         log.push(`Line primitive L needs 2 args, got ${args.length}`);
         continue;
@@ -166,7 +156,7 @@ function parsePathPrimitives(path: Lbrn2Path, log: string[]): string {
       }
       d += ` L${F(p1.x)},${F(p1.y)}`;
       currentLastIdx = idx1num;
-    } else if (primType === "B") {
+    } else if (primType === PRIM_BEZIER) {
       // LBRN2 Bezier (cubic)
       if (args.length !== 2) {
         log.push(`Bezier primitive B needs 2 args, got ${args.length}`);
@@ -220,7 +210,7 @@ function parsePathPrimitives(path: Lbrn2Path, log: string[]): string {
         p1.x
       )},${F(p1.y)}`;
       currentLastIdx = idx1numB;
-    } else if (primType === "Q") {
+    } else if (primType === PRIM_QUADRATIC) {
       // LBRN2 Quadratic Bezier
       if (args.length !== 2 && args.length !== 3) {
         log.push(`Quadratic Bezier Q needs 2 or 3 args, got ${args.length}`);
@@ -232,7 +222,7 @@ function parsePathPrimitives(path: Lbrn2Path, log: string[]): string {
         )}`
       );
       // Fallback or simple implementation
-    } else if (primType === "C") {
+    } else if (primType === PRIM_CUBIC) {
       // LBRN2 Cubic Bezier (if different from 'B')
       if (args.length !== 3 && args.length !== 4) {
         log.push(`Cubic Bezier C needs 3 or 4 args, got ${args.length}`);
@@ -311,36 +301,38 @@ function shapeToSvgElement(
       return "";
     }
     case "Group": {
-      const group = shape as any;
-      if (!group.Children || !Array.isArray(group.Children)) {
-        log.push(`Group shape with no children: ${JSON.stringify(shape)}`);
-        return "";
-      }
-      // If only one child, flatten transform into the child
-      if (group.Children.length === 1) {
-        const child = { ...group.Children[0] };
-        // Compose transforms: group.XForm * child.XForm
-        if (child.XForm) {
-          const g = shape.XForm;
-          const c = child.XForm;
-          child.XForm = {
-            a: g.a * c.a + g.c * c.b,
-            b: g.b * c.a + g.d * c.b,
-            c: g.a * c.c + g.c * c.d,
-            d: g.b * c.c + g.d * c.d,
-            e: g.a * c.e + g.c * c.f + g.e,
-            f: g.b * c.e + g.d * c.f + g.f,
-          };
-        } else {
-          child.XForm = shape.XForm;
+      if (shape.Type === "Group") {
+        const group = shape as import("./lbrn2Types").Lbrn2Group;
+        if (!group.Children || !Array.isArray(group.Children)) {
+          log.push(`Group shape with no children: ${JSON.stringify(shape)}`);
+          return "";
         }
-        return shapeToSvgElement(child, cutSettings, log);
+        // If only one child, flatten transform into the child
+        if (group.Children.length === 1) {
+          const child = { ...group.Children[0] } as Lbrn2Shape;
+          // Compose transforms: group.XForm * child.XForm
+          if (child.XForm) {
+            const g = shape.XForm;
+            const c = child.XForm;
+            child.XForm = {
+              a: g.a * c.a + g.c * c.b,
+              b: g.b * c.a + g.d * c.b,
+              c: g.a * c.c + g.c * c.d,
+              d: g.b * c.c + g.d * c.d,
+              e: g.a * c.e + g.c * c.f + g.e,
+              f: g.b * c.e + g.d * c.f + g.f,
+            };
+          } else {
+            child.XForm = shape.XForm;
+          }
+          return shapeToSvgElement(child, cutSettings, log);
+        }
+        // Otherwise, wrap in <g>
+        const groupContent = group.Children.map((child) =>
+          shapeToSvgElement(child, cutSettings, log)
+        ).join("\n    ");
+        return `<g transform="${transform}">\n    ${groupContent}\n</g>`;
       }
-      // Otherwise, wrap in <g>
-      const groupContent = group.Children.map((child: any) =>
-        shapeToSvgElement(child, cutSettings, log)
-      ).join("\n    ");
-      return `<g transform="${transform}">\n    ${groupContent}\n</g>`;
     }
     default:
       log.push(`Unsupported shape type: ${(shape as any).Type}`);
@@ -410,7 +402,7 @@ function getTransformedBounds(
       const primType = token.type;
       const args = token.args;
 
-      if (primType === "L") {
+      if (primType === PRIM_LINE) {
         if (args.length === 2) {
           const idx0 = args[0];
           const idx1 = args[1];
@@ -421,7 +413,7 @@ function getTransformedBounds(
             if (p1) pointsToBound.push(p1);
           }
         }
-      } else if (primType === "B") {
+      } else if (primType === PRIM_BEZIER) {
         if (args.length === 2) {
           const idx0 = args[0];
           const idx1 = args[1];
@@ -525,32 +517,34 @@ function getTransformedBounds(
       pointsToBound.push(...path.parsedVerts);
     }
   } else if (shape.Type === "Group") {
-    const group = shape as any;
-    if (!group.Children || group.Children.length === 0) return null;
+    if (shape.Type === "Group") {
+      const group = shape as import("./lbrn2Types").Lbrn2Group;
+      if (!group.Children || group.Children.length === 0) return null;
 
-    let combinedBounds: {
-      minX: number;
-      minY: number;
-      maxX: number;
-      maxY: number;
-    } | null = null;
-    for (const childShape of group.Children) {
-      if (!childShape.XForm || !shape.XForm) continue;
-      const effectiveChildXForm = composeXForms(shape.XForm, childShape.XForm);
-      const tempRenderableChild = { ...childShape, XForm: effectiveChildXForm };
-      const childBounds = getTransformedBounds(tempRenderableChild);
-      if (childBounds) {
-        if (!combinedBounds) {
-          combinedBounds = childBounds;
-        } else {
-          combinedBounds.minX = Math.min(combinedBounds.minX, childBounds.minX);
-          combinedBounds.minY = Math.min(combinedBounds.minY, childBounds.minY);
-          combinedBounds.maxX = Math.max(combinedBounds.maxX, childBounds.maxX);
-          combinedBounds.maxY = Math.max(combinedBounds.maxY, childBounds.maxY);
+      let combinedBounds: {
+        minX: number;
+        minY: number;
+        maxX: number;
+        maxY: number;
+      } | null = null;
+      for (const childShape of group.Children) {
+        if (!childShape.XForm || !shape.XForm) continue;
+        const effectiveChildXForm = composeXForms(shape.XForm, childShape.XForm);
+        const tempRenderableChild = { ...childShape, XForm: effectiveChildXForm };
+        const childBounds = getTransformedBounds(tempRenderableChild);
+        if (childBounds) {
+          if (!combinedBounds) {
+            combinedBounds = childBounds;
+          } else {
+            combinedBounds.minX = Math.min(combinedBounds.minX, childBounds.minX);
+            combinedBounds.minY = Math.min(combinedBounds.minY, childBounds.minY);
+            combinedBounds.maxX = Math.max(combinedBounds.maxX, childBounds.maxX);
+            combinedBounds.maxY = Math.max(combinedBounds.maxY, childBounds.maxY);
+          }
         }
       }
+      return combinedBounds;
     }
-    return combinedBounds;
   }
 
   if (pointsToBound.length === 0) return null;
