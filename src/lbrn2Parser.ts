@@ -1,9 +1,9 @@
-import { XMLParser, XMLValidator } from 'fast-xml-parser';
-import type { LightBurnProjectFile, Lbrn2Shape, Lbrn2XForm, Lbrn2Vec2, Lbrn2CutSetting } from './lbrn2Types';
+import { XMLParser, XMLValidator } from "fast-xml-parser";
+import type { LightBurnProjectFile, Lbrn2XForm, Lbrn2Vec2 } from "./lbrn2Types";
 
 const alwaysArrayPaths = [
-    "LightBurnProject.Shape",
-    "LightBurnProject.CutSetting",
+  "LightBurnProject.Shape",
+  "LightBurnProject.CutSetting",
 ];
 
 const parser = new XMLParser({
@@ -34,7 +34,7 @@ const parser = new XMLParser({
       return String(tagValue);
     }
     return tagValue;
-  }
+  },
 });
 
 function parseXFormString(xformStr: string): Lbrn2XForm {
@@ -56,27 +56,36 @@ function parseXFormString(xformStr: string): Lbrn2XForm {
   };
 }
 
-function parseControlPointData(cpString: string | undefined): Partial<Pick<Lbrn2Vec2, 'c0x' | 'c0y' | 'c1x' | 'c1y'>> {
-  const data: Partial<Pick<Lbrn2Vec2, 'c0x' | 'c0y' | 'c1x' | 'c1y'>> = {};
-  if (!cpString || !cpString.startsWith('c')) {
+function parseControlPointData(
+  cpString: string | undefined
+): Partial<Pick<Lbrn2Vec2, "c0x" | "c0y" | "c1x" | "c1y">> {
+  const data: Partial<Pick<Lbrn2Vec2, "c0x" | "c0y" | "c1x" | "c1y">> = {};
+  if (!cpString || !cpString.startsWith("c")) {
     return data;
   }
   // Explicit parser: scan for c0x/c0y/c1x/c1y followed by a number
   let i = 0;
   while (i < cpString.length) {
-    if (cpString.startsWith('c0x', i) || cpString.startsWith('c0y', i) ||
-        cpString.startsWith('c1x', i) || cpString.startsWith('c1y', i)) {
-      const key = cpString.slice(i, i + 3) as 'c0x' | 'c0y' | 'c1x' | 'c1y';
+    if (
+      cpString.startsWith("c0x", i) ||
+      cpString.startsWith("c0y", i) ||
+      cpString.startsWith("c1x", i) ||
+      cpString.startsWith("c1y", i)
+    ) {
+      const key = cpString.slice(i, i + 3) as "c0x" | "c0y" | "c1x" | "c1y";
       i += 3;
       // Parse number (may include sign, decimal, exponent)
-      let numStr = '';
+      let numStr = "";
       while (i < cpString.length) {
         const ch = cpString[i];
         if (ch !== undefined) {
           if (
-            ch === '-' || ch === '+' ||
-            (ch >= '0' && ch <= '9') ||
-            ch === '.' || ch === 'e' || ch === 'E'
+            ch === "-" ||
+            ch === "+" ||
+            (ch >= "0" && ch <= "9") ||
+            ch === "." ||
+            ch === "e" ||
+            ch === "E"
           ) {
             numStr += ch;
             i++;
@@ -112,7 +121,7 @@ function parseVertListString(vertListStr: string): Lbrn2Vec2[] {
         break;
       }
     }
-    if (i < len && vertListStr[i] === 'V') {
+    if (i < len && vertListStr[i] === "V") {
       i++;
       // Skip whitespace
       while (i < len) {
@@ -124,14 +133,17 @@ function parseVertListString(vertListStr: string): Lbrn2Vec2[] {
         }
       }
       // Parse x
-      let xStr = '';
+      let xStr = "";
       while (i < len) {
         const ch = vertListStr[i];
         if (ch !== undefined) {
           if (
-            ch === '-' || ch === '+' ||
-            (ch >= '0' && ch <= '9') ||
-            ch === '.' || ch === 'e' || ch === 'E'
+            ch === "-" ||
+            ch === "+" ||
+            (ch >= "0" && ch <= "9") ||
+            ch === "." ||
+            ch === "e" ||
+            ch === "E"
           ) {
             xStr += ch;
             i++;
@@ -152,14 +164,17 @@ function parseVertListString(vertListStr: string): Lbrn2Vec2[] {
         }
       }
       // Parse y
-      let yStr = '';
+      let yStr = "";
       while (i < len) {
         const ch = vertListStr[i];
         if (ch !== undefined) {
           if (
-            ch === '-' || ch === '+' ||
-            (ch >= '0' && ch <= '9') ||
-            ch === '.' || ch === 'e' || ch === 'E'
+            ch === "-" ||
+            ch === "+" ||
+            (ch >= "0" && ch <= "9") ||
+            ch === "." ||
+            ch === "e" ||
+            ch === "E"
           ) {
             yStr += ch;
             i++;
@@ -171,8 +186,8 @@ function parseVertListString(vertListStr: string): Lbrn2Vec2[] {
         }
       }
       // Parse control point string (until next 'V' or end)
-      let cpStr = '';
-      while (i < len && vertListStr[i] !== 'V') {
+      let cpStr = "";
+      while (i < len && vertListStr[i] !== "V") {
         const ch = vertListStr[i];
         if (ch !== undefined) {
           cpStr += ch;
@@ -180,7 +195,11 @@ function parseVertListString(vertListStr: string): Lbrn2Vec2[] {
         i++;
       }
       const controlPoints = parseControlPointData(cpStr.trim());
-      vertices.push({ x: parseFloat(xStr), y: parseFloat(yStr), ...controlPoints });
+      vertices.push({
+        x: parseFloat(xStr),
+        y: parseFloat(yStr),
+        ...controlPoints,
+      });
     } else {
       // Skip unknown/invalid chars
       i++;
@@ -197,25 +216,31 @@ export function parseLbrn2(xmlString: string): LightBurnProjectFile {
 
   if (parsed.LightBurnProject) {
     if (parsed.LightBurnProject.CutSetting) {
-        if (!Array.isArray(parsed.LightBurnProject.CutSetting)) {
-            parsed.LightBurnProject.CutSetting = [parsed.LightBurnProject.CutSetting];
-        }
-        parsed.LightBurnProject.CutSetting.forEach(cs => {
-            if (!cs) return;
-            // Flatten all properties with a single 'Value' key
-            for (const key in cs) {
-                if (Object.prototype.hasOwnProperty.call(cs, key)) {
-                    const val = (cs as any)[key];
-                    if (val && typeof val === 'object' && Object.prototype.hasOwnProperty.call(val, 'Value')) {
-                        if (Object.keys(val).length === 1) {
-                            (cs as any)[key] = val.Value;
-                        }
-                    }
-                }
+      if (!Array.isArray(parsed.LightBurnProject.CutSetting)) {
+        parsed.LightBurnProject.CutSetting = [
+          parsed.LightBurnProject.CutSetting,
+        ];
+      }
+      parsed.LightBurnProject.CutSetting.forEach((cs) => {
+        if (!cs) return;
+        // Flatten all properties with a single 'Value' key
+        for (const key in cs) {
+          if (Object.prototype.hasOwnProperty.call(cs, key)) {
+            const val = (cs as any)[key];
+            if (
+              val &&
+              typeof val === "object" &&
+              Object.prototype.hasOwnProperty.call(val, "Value")
+            ) {
+              if (Object.keys(val).length === 1) {
+                (cs as any)[key] = val.Value;
+              }
             }
-        });
+          }
+        }
+      });
     } else {
-        parsed.LightBurnProject.CutSetting = [];
+      parsed.LightBurnProject.CutSetting = [];
     }
 
     if (parsed.LightBurnProject.Shape) {
@@ -225,12 +250,12 @@ export function parseLbrn2(xmlString: string): LightBurnProjectFile {
       function parseShapeRecursive(shape: any): any {
         if (shape.XFormVal) {
           shape.XForm = parseXFormString(shape.XFormVal);
-        } else if (shape.XForm && typeof shape.XForm === 'string') {
+        } else if (shape.XForm && typeof shape.XForm === "string") {
           shape.XForm = parseXFormString(shape.XForm as unknown as string);
         }
 
         if (shape.Type === "Path") {
-          if (shape.VertList && typeof shape.VertList === 'string') {
+          if (shape.VertList && typeof shape.VertList === "string") {
             shape.parsedVerts = parseVertListString(shape.VertList);
           }
         } else if (shape.Type === "Group" && shape.Children) {
@@ -244,7 +269,8 @@ export function parseLbrn2(xmlString: string): LightBurnProjectFile {
         return shape;
       }
 
-      parsed.LightBurnProject.Shape = parsed.LightBurnProject.Shape.map(parseShapeRecursive);
+      parsed.LightBurnProject.Shape =
+        parsed.LightBurnProject.Shape.map(parseShapeRecursive);
     } else {
       parsed.LightBurnProject.Shape = [];
     }

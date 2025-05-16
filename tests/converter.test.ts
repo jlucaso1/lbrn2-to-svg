@@ -1,12 +1,12 @@
-import { describe, test, expect } from 'bun:test';
-import * as fs from 'fs';
-import * as path from 'path';
-import { parseLbrn2 } from '../src/lbrn2Parser';
-import { lbrn2ToSvg } from '../src/svgConverter';
+import { describe, test, expect } from "bun:test";
+import * as fs from "fs";
+import * as path from "path";
+import { parseLbrn2 } from "../src/lbrn2Parser";
+import { lbrn2ToSvg } from "../src/svgConverter";
 
-const artifactsDir = path.join(import.meta.dir, 'artifacts');
+const artifactsDir = path.join(import.meta.dir, "artifacts");
 
-import { XMLParser } from 'fast-xml-parser';
+import { XMLParser } from "fast-xml-parser";
 
 // Helper to compare SVGs structurally (ignoring attribute order and formatting)
 function structurallyEqualSvg(svgA: string, svgB: string): boolean {
@@ -33,7 +33,11 @@ function structurallyEqualSvg(svgA: string, svgB: string): boolean {
         return val.replace(
           /^(-?\d+)(\.\d+)?([a-zA-Z%]+)$/,
           (_, int, dec, unit) =>
-            (dec ? Number(int + dec).toString().replace(/\.0+$/, "") : int) + unit
+            (dec
+              ? Number(int + dec)
+                  .toString()
+                  .replace(/\.0+$/, "")
+              : int) + unit
         );
       }
       // Normalize transform: remove spaces, unify delimiters, normalize numbers
@@ -46,8 +50,8 @@ function structurallyEqualSvg(svgA: string, svgB: string): boolean {
             const n = parseFloat(num);
             if (isNaN(n)) return num;
             let s = n.toFixed(3);
-            s = s.replace(/(\.\d*?[1-9])0+$/, '$1');
-            s = s.replace(/\.0+$/, '');
+            s = s.replace(/(\.\d*?[1-9])0+$/, "$1");
+            s = s.replace(/\.0+$/, "");
             return s;
           });
       }
@@ -74,8 +78,8 @@ function structurallyEqualSvg(svgA: string, svgB: string): boolean {
           const num = parseFloat(numStr);
           if (isNaN(num)) return numStr;
           let s = num.toFixed(3);
-          s = s.replace(/(\.\d*?[1-9])0+$/, '$1');
-          s = s.replace(/\.0+$/, '');
+          s = s.replace(/(\.\d*?[1-9])0+$/, "$1");
+          s = s.replace(/\.0+$/, "");
           return s;
         });
         // Normalize Z/z to Z for comparison consistency
@@ -98,7 +102,8 @@ function structurallyEqualSvg(svgA: string, svgB: string): boolean {
   // Only ignore width, height, and viewBox when they are direct children of the <svg> element.
   // This ensures the test focuses on path geometry and style, not on canvas size or placement.
   function normalizeAttrs(obj: any, parentKey?: string): any {
-    if (typeof obj !== "object" || obj === null) return normalizeValue(obj, parentKey);
+    if (typeof obj !== "object" || obj === null)
+      return normalizeValue(obj, parentKey);
     if (Array.isArray(obj)) return obj.map((v) => normalizeAttrs(v, parentKey));
     const sorted: any = {};
     Object.keys(obj)
@@ -113,17 +118,21 @@ function structurallyEqualSvg(svgA: string, svgB: string): boolean {
   }
 
   // Remove whitespace between tags and parse
-  const objA = normalizeAttrs(parser.parse(svgA.replace(/>\s+</g, '><')));
-  const objB = normalizeAttrs(parser.parse(svgB.replace(/>\s+</g, '><')));
+  const objA = normalizeAttrs(parser.parse(svgA.replace(/>\s+</g, "><")));
+  const objB = normalizeAttrs(parser.parse(svgB.replace(/>\s+</g, "><")));
   return JSON.stringify(objA) === JSON.stringify(objB);
 }
 
-describe('LBRN2 to SVG Converter', () => {
+describe("LBRN2 to SVG Converter", () => {
   const testCases = [
-    { name: 'circle', lbrn2File: 'circle.lbrn2', svgFile: 'circle.svg' },
-    { name: 'square', lbrn2File: 'square.lbrn2', svgFile: 'square.svg' },
-    { name: 'line', lbrn2File: 'line.lbrn2', svgFile: 'line.svg' },
-    { name: 'butterfly_vectorized', lbrn2File: 'butterfly_vectorized.lbrn2', svgFile: 'butterfly_vectorized.svg' },
+    { name: "circle", lbrn2File: "circle.lbrn2", svgFile: "circle.svg" },
+    { name: "square", lbrn2File: "square.lbrn2", svgFile: "square.svg" },
+    { name: "line", lbrn2File: "line.lbrn2", svgFile: "line.svg" },
+    {
+      name: "butterfly_vectorized",
+      lbrn2File: "butterfly_vectorized.lbrn2",
+      svgFile: "butterfly_vectorized.svg",
+    },
   ];
 
   for (const tc of testCases) {
@@ -131,8 +140,8 @@ describe('LBRN2 to SVG Converter', () => {
       const lbrn2Path = path.join(artifactsDir, tc.lbrn2File);
       const expectedSvgPath = path.join(artifactsDir, tc.svgFile);
 
-      const lbrn2Content = fs.readFileSync(lbrn2Path, 'utf-8');
-      const expectedSvgContent = fs.readFileSync(expectedSvgPath, 'utf-8');
+      const lbrn2Content = fs.readFileSync(lbrn2Path, "utf-8");
+      const expectedSvgContent = fs.readFileSync(expectedSvgPath, "utf-8");
 
       const parsedLbrn2 = parseLbrn2(lbrn2Content);
       const generatedSvg = lbrn2ToSvg(parsedLbrn2);
@@ -145,10 +154,16 @@ describe('LBRN2 to SVG Converter', () => {
           parseAttributeValue: false,
           trimValues: true,
         });
-        const objA = parser.parse(generatedSvg.replace(/>\s+</g, '><'));
-        const objB = parser.parse(expectedSvgContent.replace(/>\s+</g, '><'));
-        console.error(`\n--- Generated SVG Object ---\n`, JSON.stringify(objA, null, 2));
-        console.error(`\n--- Expected SVG Object ---\n`, JSON.stringify(objB, null, 2));
+        const objA = parser.parse(generatedSvg.replace(/>\s+</g, "><"));
+        const objB = parser.parse(expectedSvgContent.replace(/>\s+</g, "><"));
+        console.error(
+          `\n--- Generated SVG Object ---\n`,
+          JSON.stringify(objA, null, 2)
+        );
+        console.error(
+          `\n--- Expected SVG Object ---\n`,
+          JSON.stringify(objB, null, 2)
+        );
       }
 
       expect(structurallyEqualSvg(generatedSvg, expectedSvgContent)).toBe(true);

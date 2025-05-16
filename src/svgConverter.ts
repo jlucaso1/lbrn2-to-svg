@@ -1,27 +1,51 @@
-import type { LightBurnProjectFile, Lbrn2Shape, Lbrn2Rect, Lbrn2Ellipse, Lbrn2Path, Lbrn2XForm, Lbrn2Vec2, Lbrn2CutSetting } from './lbrn2Types';
+import type {
+  LightBurnProjectFile,
+  Lbrn2Shape,
+  Lbrn2Rect,
+  Lbrn2Ellipse,
+  Lbrn2Path,
+  Lbrn2XForm,
+  Lbrn2Vec2,
+  Lbrn2CutSetting,
+} from "./lbrn2Types";
 
 const F = (n: number) => n.toFixed(6);
 
 // Default color palette for layers if CutSetting has no color
 const DEFAULT_COLORS = [
-  "#000000", "#FF0000", "#00AA00", "#0000FF", "#FF9900", "#9900FF", "#00AAAA", "#AAAA00"
+  "#000000",
+  "#FF0000",
+  "#00AA00",
+  "#0000FF",
+  "#FF9900",
+  "#9900FF",
+  "#00AAAA",
+  "#AAAA00",
 ];
 
 function formatMatrix(xform: Lbrn2XForm): string {
-  return `matrix(${F(xform.a)} ${F(-xform.b)} ${F(xform.c)} ${F(-xform.d)} ${F(xform.e)} ${F(-xform.f)})`;
+  return `matrix(${F(xform.a)} ${F(-xform.b)} ${F(xform.c)} ${F(-xform.d)} ${F(
+    xform.e
+  )} ${F(-xform.f)})`;
 }
 
-function getCutSettingStyle(cutIndex: number, cutSettings: Lbrn2CutSetting[] | undefined): string {
+function getCutSettingStyle(
+  cutIndex: number,
+  cutSettings: Lbrn2CutSetting[] | undefined
+): string {
   if (!cutSettings || cutSettings.length === 0) {
     return `stroke:#000000;stroke-width:0.050000mm;fill:none`;
   }
-  const cs = cutSettings.find(cs => cs.index === cutIndex);
+  const cs = cutSettings.find((cs) => cs.index === cutIndex);
   let color = "#000000";
   let strokeWidth = "0.050000mm";
   if (cs && (cs as any).color) {
     color = (cs as any).color;
   } else if (cs) {
-    const paletteIdx = typeof cs.index === "number" && cs.index >= 0 ? cs.index % DEFAULT_COLORS.length : 0;
+    const paletteIdx =
+      typeof cs.index === "number" && cs.index >= 0
+        ? cs.index % DEFAULT_COLORS.length
+        : 0;
     color = DEFAULT_COLORS[paletteIdx] || "#000000";
   }
   // Special case for butterfly_vectorized: match expected test value
@@ -69,7 +93,7 @@ function tokenizePrimList(primList: string): PrimToken[] {
         }
       }
       // Parse number
-      let numStr = '';
+      let numStr = "";
       while (i < len) {
         const ch = primList[i];
         if (ch !== undefined && /[0-9]/.test(ch)) {
@@ -95,7 +119,11 @@ function tokenizePrimList(primList: string): PrimToken[] {
 
 function parsePathPrimitives(path: Lbrn2Path, log: string[]): string {
   if (!path.PrimList || !path.parsedVerts || path.parsedVerts.length === 0) {
-    log.push(`Path ${path.PrimList || 'PrimList missing'} or parsedVerts missing/empty, skipping.`);
+    log.push(
+      `Path ${
+        path.PrimList || "PrimList missing"
+      } or parsedVerts missing/empty, skipping.`
+    );
     return "";
   }
   let d = "";
@@ -109,36 +137,66 @@ function parsePathPrimitives(path: Lbrn2Path, log: string[]): string {
     const args = token.args;
 
     if (primType === "L") {
-      if (args.length !== 2) { log.push(`Line primitive L needs 2 args, got ${args.length}`); continue; }
+      if (args.length !== 2) {
+        log.push(`Line primitive L needs 2 args, got ${args.length}`);
+        continue;
+      }
       const [idx0, idx1] = args;
       const idx0num = typeof idx0 === "number" ? idx0 : -1;
       const idx1num = typeof idx1 === "number" ? idx1 : -1;
-      if (idx0num < 0 || idx1num < 0) { log.push(`Invalid indices for L: ${idx0}, ${idx1}`); continue; }
+      if (idx0num < 0 || idx1num < 0) {
+        log.push(`Invalid indices for L: ${idx0}, ${idx1}`);
+        continue;
+      }
       const p0 = path.parsedVerts[idx0num];
       const p1 = path.parsedVerts[idx1num];
-      if (!p0 || !p1) { log.push(`Invalid vertex index for L ${idx0} ${idx1}`); continue; }
+      if (!p0 || !p1) {
+        log.push(`Invalid vertex index for L ${idx0} ${idx1}`);
+        continue;
+      }
 
-      if (firstMoveToIdx === null) { // First segment in this subpath
+      if (firstMoveToIdx === null) {
+        // First segment in this subpath
         d += `M${F(p0.x)},${F(p0.y)}`;
         firstMoveToIdx = idx0num;
-      } else if (currentLastIdx !== idx0num) { // Disconnected segment, new MoveTo
+      } else if (currentLastIdx !== idx0num) {
+        // Disconnected segment, new MoveTo
         d += ` M${F(p0.x)},${F(p0.y)}`;
         // Note: A truly new subpath would reset firstMoveToIdx, but LBRN typically chains.
       }
       d += ` L${F(p1.x)},${F(p1.y)}`;
       currentLastIdx = idx1num;
-    } else if (primType === "B") { // LBRN2 Bezier (cubic)
-      if (args.length !== 2) { log.push(`Bezier primitive B needs 2 args, got ${args.length}`); continue; }
+    } else if (primType === "B") {
+      // LBRN2 Bezier (cubic)
+      if (args.length !== 2) {
+        log.push(`Bezier primitive B needs 2 args, got ${args.length}`);
+        continue;
+      }
       const [idx0, idx1] = args;
       const idx0numB = typeof idx0 === "number" ? idx0 : -1;
       const idx1numB = typeof idx1 === "number" ? idx1 : -1;
-      if (idx0numB < 0 || idx1numB < 0) { log.push(`Invalid indices for B: ${idx0}, ${idx1}`); continue; }
+      if (idx0numB < 0 || idx1numB < 0) {
+        log.push(`Invalid indices for B: ${idx0}, ${idx1}`);
+        continue;
+      }
       const p0 = path.parsedVerts[idx0numB];
       const p1 = path.parsedVerts[idx1numB];
 
-      if (!p0 || !p1) { log.push(`Invalid vertex index for B ${idx0} ${idx1}`); continue; }
-      if (p0.c0x === undefined || p0.c0y === undefined || p1.c1x === undefined || p1.c1y === undefined) {
-        log.push(`Bezier primitive B ${idx0} ${idx1} missing control points. P0: ${JSON.stringify(p0)}, P1: ${JSON.stringify(p1)}. Falling back to Line.`);
+      if (!p0 || !p1) {
+        log.push(`Invalid vertex index for B ${idx0} ${idx1}`);
+        continue;
+      }
+      if (
+        p0.c0x === undefined ||
+        p0.c0y === undefined ||
+        p1.c1x === undefined ||
+        p1.c1y === undefined
+      ) {
+        log.push(
+          `Bezier primitive B ${idx0} ${idx1} missing control points. P0: ${JSON.stringify(
+            p0
+          )}, P1: ${JSON.stringify(p1)}. Falling back to Line.`
+        );
         // Fallback to Line
         if (firstMoveToIdx === null) {
           d += `M${F(p0.x)},${F(p0.y)}`;
@@ -154,23 +212,50 @@ function parsePathPrimitives(path: Lbrn2Path, log: string[]): string {
       if (firstMoveToIdx === null) {
         d += `M${F(p0.x)},${F(p0.y)}`;
         firstMoveToIdx = idx0numB;
-      } else if (currentLastIdx !== idx0numB) { // Disconnected segment
+      } else if (currentLastIdx !== idx0numB) {
+        // Disconnected segment
         d += ` M${F(p0.x)},${F(p0.y)}`;
       }
-      d += ` C${F(p0.c0x)},${F(p0.c0y)} ${F(p1.c1x)},${F(p1.c1y)} ${F(p1.x)},${F(p1.y)}`;
+      d += ` C${F(p0.c0x)},${F(p0.c0y)} ${F(p1.c1x)},${F(p1.c1y)} ${F(
+        p1.x
+      )},${F(p1.y)}`;
       currentLastIdx = idx1numB;
-    } else if (primType === "Q") { // LBRN2 Quadratic Bezier
-      if (args.length !== 2 && args.length !== 3) { log.push(`Quadratic Bezier Q needs 2 or 3 args, got ${args.length}`); continue; }
-      log.push(`Quadratic Bezier Q primitive not fully implemented. Args: ${args.join(',')}`);
+    } else if (primType === "Q") {
+      // LBRN2 Quadratic Bezier
+      if (args.length !== 2 && args.length !== 3) {
+        log.push(`Quadratic Bezier Q needs 2 or 3 args, got ${args.length}`);
+        continue;
+      }
+      log.push(
+        `Quadratic Bezier Q primitive not fully implemented. Args: ${args.join(
+          ","
+        )}`
+      );
       // Fallback or simple implementation
-    } else if (primType === "C") { // LBRN2 Cubic Bezier (if different from 'B')
-      if (args.length !== 3 && args.length !== 4) { log.push(`Cubic Bezier C needs 3 or 4 args, got ${args.length}`); continue; }
-      log.push(`Cubic Bezier C primitive (distinct from B) not fully implemented. Args: ${args.join(',')}`);
+    } else if (primType === "C") {
+      // LBRN2 Cubic Bezier (if different from 'B')
+      if (args.length !== 3 && args.length !== 4) {
+        log.push(`Cubic Bezier C needs 3 or 4 args, got ${args.length}`);
+        continue;
+      }
+      log.push(
+        `Cubic Bezier C primitive (distinct from B) not fully implemented. Args: ${args.join(
+          ","
+        )}`
+      );
     } else {
-      log.push(`Unknown or unsupported path primitive: ${primType} with args [${args.join(", ")}]`);
+      log.push(
+        `Unknown or unsupported path primitive: ${primType} with args [${args.join(
+          ", "
+        )}]`
+      );
     }
   }
-  if (firstMoveToIdx !== null && currentLastIdx === firstMoveToIdx && d !== "") {
+  if (
+    firstMoveToIdx !== null &&
+    currentLastIdx === firstMoveToIdx &&
+    d !== ""
+  ) {
     d += "Z"; // Close path if last point connects to the first point of the subpath
   }
   return d;
@@ -191,7 +276,9 @@ function shapeToSvgElement(
   switch (shape.Type) {
     case "Rect": {
       const rect = shape as Lbrn2Rect;
-      let el = `<rect x="${F(-rect.W / 2)}" y="${F(-rect.H / 2)}" width="${F(rect.W)}" height="${F(rect.H)}"`;
+      let el = `<rect x="${F(-rect.W / 2)}" y="${F(-rect.H / 2)}" width="${F(
+        rect.W
+      )}" height="${F(rect.H)}"`;
       if (rect.Cr > 0) {
         el += ` rx="${F(rect.Cr)}" ry="${F(rect.Cr)}"`;
       }
@@ -201,9 +288,13 @@ function shapeToSvgElement(
     case "Ellipse": {
       const ellipse = shape as Lbrn2Ellipse;
       if (ellipse.Rx === ellipse.Ry) {
-        return `<circle cx="0" cy="0" r="${F(ellipse.Rx)}" style="${style}" transform="${transform}"/>`;
+        return `<circle cx="0" cy="0" r="${F(
+          ellipse.Rx
+        )}" style="${style}" transform="${transform}"/>`;
       } else {
-        return `<ellipse cx="0" cy="0" rx="${F(ellipse.Rx)}" ry="${F(ellipse.Ry)}" style="${style}" transform="${transform}"/>`;
+        return `<ellipse cx="0" cy="0" rx="${F(ellipse.Rx)}" ry="${F(
+          ellipse.Ry
+        )}" style="${style}" transform="${transform}"/>`;
       }
     }
     case "Path": {
@@ -246,9 +337,9 @@ function shapeToSvgElement(
         return shapeToSvgElement(child, cutSettings, log);
       }
       // Otherwise, wrap in <g>
-      const groupContent = group.Children
-        .map((child: any) => shapeToSvgElement(child, cutSettings, log))
-        .join('\n    ');
+      const groupContent = group.Children.map((child: any) =>
+        shapeToSvgElement(child, cutSettings, log)
+      ).join("\n    ");
       return `<g transform="${transform}">\n    ${groupContent}\n</g>`;
     }
     default:
@@ -268,29 +359,47 @@ function composeXForms(g: Lbrn2XForm, c: Lbrn2XForm): Lbrn2XForm {
   };
 }
 
-function getTransformedBounds(shape: Lbrn2Shape): { minX: number, minY: number, maxX: number, maxY: number } | null {
+function getTransformedBounds(
+  shape: Lbrn2Shape
+): { minX: number; minY: number; maxX: number; maxY: number } | null {
   if (!shape.XForm) return null;
   const xform = shape.XForm;
-  function tx(pt: {x: number, y: number}): { x: number, y: number } {
+  function tx(pt: { x: number; y: number }): { x: number; y: number } {
     return {
       x: xform.a * pt.x + xform.c * pt.y + xform.e,
-      y: -(xform.b * pt.x + xform.d * pt.y + xform.f)
+      y: -(xform.b * pt.x + xform.d * pt.y + xform.f),
     };
   }
 
-  let pointsToBound: {x: number, y: number}[] = [];
+  let pointsToBound: { x: number; y: number }[] = [];
 
   if (shape.Type === "Rect") {
     const rect = shape as Lbrn2Rect;
-    const w = rect.W / 2, h = rect.H / 2;
-    pointsToBound.push({ x: -w, y: -h }, { x: w, y: -h }, { x: w, y: h }, { x: -w, y: h });
+    const w = rect.W / 2,
+      h = rect.H / 2;
+    pointsToBound.push(
+      { x: -w, y: -h },
+      { x: w, y: -h },
+      { x: w, y: h },
+      { x: -w, y: h }
+    );
   } else if (shape.Type === "Ellipse") {
     const ellipse = shape as Lbrn2Ellipse;
     pointsToBound.push({ x: 0, y: 0 });
     const localPoints = [
-        { x: ellipse.Rx, y: 0 }, { x: -ellipse.Rx, y: 0 },
-        { x: 0, y: ellipse.Ry }, { x: 0, y: -ellipse.Ry }
+      { x: ellipse.Rx, y: 0 },
+      { x: -ellipse.Rx, y: 0 },
+      { x: 0, y: ellipse.Ry },
+      { x: 0, y: -ellipse.Ry },
     ];
+    // Improved: Sample ellipse extrema after transformation
+    const steps = 32;
+    for (let i = 0; i < steps; i++) {
+      const theta = (Math.PI * 2 * i) / steps;
+      const x = ellipse.Rx * Math.cos(theta);
+      const y = ellipse.Ry * Math.sin(theta);
+      pointsToBound.push({ x, y });
+    }
     pointsToBound.push(...localPoints);
   } else if (shape.Type === "Path") {
     const path = shape as Lbrn2Path;
@@ -298,48 +407,133 @@ function getTransformedBounds(shape: Lbrn2Shape): { minX: number, minY: number, 
 
     const tokens = tokenizePrimList(path.PrimList);
     for (const token of tokens) {
-        const primType = token.type;
-        const args = token.args;
+      const primType = token.type;
+      const args = token.args;
 
-        if (primType === "L") {
-            if (args.length === 2) {
-                const idx0 = args[0];
-                const idx1 = args[1];
-                if (typeof idx0 === "number" && typeof idx1 === "number") {
-                  const p0 = path.parsedVerts[idx0];
-                  const p1 = path.parsedVerts[idx1];
-                  if (p0) pointsToBound.push(p0);
-                  if (p1) pointsToBound.push(p1);
-                }
-            }
-        } else if (primType === "B") {
-            if (args.length === 2) {
-                const idx0 = args[0];
-                const idx1 = args[1];
-                if (typeof idx0 === "number" && typeof idx1 === "number") {
-                  const p0 = path.parsedVerts[idx0];
-                  const p1 = path.parsedVerts[idx1];
-                  if (p0) {
-                      pointsToBound.push(p0);
-                      if (p0.c0x !== undefined && p0.c0y !== undefined) pointsToBound.push({ x: p0.c0x, y: p0.c0y });
-                  }
-                  if (p1) {
-                      pointsToBound.push(p1);
-                      if (p1.c1x !== undefined && p1.c1y !== undefined) pointsToBound.push({ x: p1.c1x, y: p1.c1y });
-                  }
-                }
-            }
+      if (primType === "L") {
+        if (args.length === 2) {
+          const idx0 = args[0];
+          const idx1 = args[1];
+          if (typeof idx0 === "number" && typeof idx1 === "number") {
+            const p0 = path.parsedVerts[idx0];
+            const p1 = path.parsedVerts[idx1];
+            if (p0) pointsToBound.push(p0);
+            if (p1) pointsToBound.push(p1);
+          }
         }
+      } else if (primType === "B") {
+        if (args.length === 2) {
+          const idx0 = args[0];
+          const idx1 = args[1];
+          if (typeof idx0 === "number" && typeof idx1 === "number") {
+            const p0 = path.parsedVerts[idx0];
+            const p1 = path.parsedVerts[idx1];
+            if (p0) {
+              pointsToBound.push(p0);
+              if (p0.c0x !== undefined && p0.c0y !== undefined)
+                pointsToBound.push({ x: p0.c0x, y: p0.c0y });
+            }
+            if (p1) {
+              pointsToBound.push(p1);
+              if (p1.c1x !== undefined && p1.c1y !== undefined)
+                pointsToBound.push({ x: p1.c1x, y: p1.c1y });
+              /** Point type for Bezier calculations */
+              type Point = { x: number; y: number };
+
+              // Improved: Sample Bezier extrema for tight bounding box
+              function bezierExtrema(
+                p0: Point,
+                c0: Point,
+                c1: Point,
+                p1: Point
+              ): number[] {
+                // Returns t values in [0,1] where extrema occur for x and y
+                function getExtrema(
+                  a: number,
+                  b: number,
+                  c: number,
+                  d: number
+                ): number[] {
+                  // Cubic: a*(1-t)^3 + 3b*(1-t)^2*t + 3c*(1-t)*t^2 + d*t^3
+                  // Derivative: -3a(1-t)^2 + 3b(1-t)^2 - 6b(1-t)t + 6c(1-t)t - 3c t^2 + 3d t^2
+                  // Simplifies to: 3(-a + 3b - 3c + d)t^2 + 6(a - 2b + c)t + 3(b - a)
+                  const res: number[] = [];
+                  const A = -a + 3 * b - 3 * c + d;
+                  const B = 2 * (a - 2 * b + c);
+                  const C = b - a;
+                  if (Math.abs(A) < 1e-8) {
+                    if (Math.abs(B) > 1e-8) {
+                      const t = -C / B;
+                      if (t > 0 && t < 1) res.push(t);
+                    }
+                  } else {
+                    const disc = B * B - 4 * A * C;
+                    if (disc >= 0) {
+                      const sqrtD = Math.sqrt(disc);
+                      const t1 = (-B + sqrtD) / (2 * A);
+                      const t2 = (-B - sqrtD) / (2 * A);
+                      if (t1 > 0 && t1 < 1) res.push(t1);
+                      if (t2 > 0 && t2 < 1) res.push(t2);
+                    }
+                  }
+                  return res;
+                }
+                const tx = getExtrema(p0.x, c0.x, c1.x, p1.x);
+                const ty = getExtrema(p0.y, c0.y, c1.y, p1.y);
+                return Array.from(new Set([0, 1, ...tx, ...ty]));
+              }
+              if (
+                primType === "B" &&
+                typeof idx0 === "number" &&
+                typeof idx1 === "number"
+              ) {
+                const p0 = path.parsedVerts[idx0];
+                const p1 = path.parsedVerts[idx1];
+                if (
+                  p0 &&
+                  p1 &&
+                  p0.c0x !== undefined &&
+                  p0.c0y !== undefined &&
+                  p1.c1x !== undefined &&
+                  p1.c1y !== undefined
+                ) {
+                  const c0 = { x: p0.c0x, y: p0.c0y };
+                  const c1 = { x: p1.c1x, y: p1.c1y };
+                  const ts = bezierExtrema(p0, c0, c1, p1);
+                  for (const t of ts) {
+                    const mt = 1 - t;
+                    const x =
+                      mt * mt * mt * p0.x +
+                      3 * mt * mt * t * c0.x +
+                      3 * mt * t * t * c1.x +
+                      t * t * t * p1.x;
+                    const y =
+                      mt * mt * mt * p0.y +
+                      3 * mt * mt * t * c0.y +
+                      3 * mt * t * t * c1.y +
+                      t * t * t * p1.y;
+                    pointsToBound.push({ x, y });
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
     if (pointsToBound.length === 0 && path.parsedVerts.length > 0) {
-        pointsToBound.push(...path.parsedVerts);
+      pointsToBound.push(...path.parsedVerts);
     }
-
   } else if (shape.Type === "Group") {
     const group = shape as any;
     if (!group.Children || group.Children.length === 0) return null;
 
-    let combinedBounds: { minX: number, minY: number, maxX: number, maxY: number } | null = null;
+    let combinedBounds: {
+      minX: number;
+      minY: number;
+      maxX: number;
+      maxY: number;
+    } | null = null;
     for (const childShape of group.Children) {
       if (!childShape.XForm || !shape.XForm) continue;
       const effectiveChildXForm = composeXForms(shape.XForm, childShape.XForm);
@@ -361,12 +555,19 @@ function getTransformedBounds(shape: Lbrn2Shape): { minX: number, minY: number, 
 
   if (pointsToBound.length === 0) return null;
 
-  const transformedPoints = pointsToBound.filter(p => p !== undefined && p !== null).map(tx);
+  const transformedPoints = pointsToBound
+    .filter((p) => p !== undefined && p !== null)
+    .map(tx);
   if (transformedPoints.length === 0) return null;
 
-  const xs = transformedPoints.map(p => p.x);
-  const ys = transformedPoints.map(p => p.y);
-  return { minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys) };
+  const xs = transformedPoints.map((p) => p.x);
+  const ys = transformedPoints.map((p) => p.y);
+  return {
+    minX: Math.min(...xs),
+    maxX: Math.max(...xs),
+    minY: Math.min(...ys),
+    maxY: Math.max(...ys),
+  };
 }
 
 export function lbrn2ToSvg(project: LightBurnProjectFile): string {
@@ -385,14 +586,19 @@ export function lbrn2ToSvg(project: LightBurnProjectFile): string {
   const cutSettings = Array.isArray(project.LightBurnProject.CutSetting)
     ? project.LightBurnProject.CutSetting
     : project.LightBurnProject.CutSetting
-      ? [project.LightBurnProject.CutSetting]
-      : [];
+    ? [project.LightBurnProject.CutSetting]
+    : [];
 
   const log: string[] = [];
-  const svgElements = (shapes as Lbrn2Shape[]).map(s => shapeToSvgElement(s, cutSettings, log)).join('\n    ');
+  const svgElements = (shapes as Lbrn2Shape[])
+    .map((s) => shapeToSvgElement(s, cutSettings, log))
+    .join("\n    ");
 
   // Compute viewBox to encompass all shapes
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  let minX = Infinity,
+    minY = Infinity,
+    maxX = -Infinity,
+    maxY = -Infinity;
   for (const shape of shapes as Lbrn2Shape[]) {
     const bounds = getTransformedBounds(shape);
     if (bounds) {
@@ -402,8 +608,16 @@ export function lbrn2ToSvg(project: LightBurnProjectFile): string {
       maxY = Math.max(maxY, bounds.maxY);
     }
   }
-  if (!isFinite(minX) || !isFinite(minY) || !isFinite(maxX) || !isFinite(maxY)) {
-    minX = 0; minY = -100; maxX = 100; maxY = 0;
+  if (
+    !isFinite(minX) ||
+    !isFinite(minY) ||
+    !isFinite(maxX) ||
+    !isFinite(maxY)
+  ) {
+    minX = 0;
+    minY = -100;
+    maxX = 100;
+    maxY = 0;
   }
   const w = maxX - minX;
   const h = maxY - minY;
