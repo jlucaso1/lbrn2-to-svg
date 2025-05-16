@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync } from "fs";
-import { lbrn2ToSvg, parseLbrn2 } from "../dist/index.js";
+import { lbrn2ToSvg, parseLbrn2 } from "lbrn2-to-svg";
 
 function printUsage() {
   console.log("Usage: <input.lbrn2> <output.svg>");
