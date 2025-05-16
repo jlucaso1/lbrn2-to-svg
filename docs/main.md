@@ -44,19 +44,40 @@ Key Child Elements of `<LightBurnProject>`:
             *   Attributes: `Rx` (radius in X), `Ry` (radius in Y).
             *   The ellipse is typically defined centered at the local origin (0,0) before `<XForm>` is applied.
         *   For `Type="Path"`:
-            *   Child Element `<VertList>`: A string defining vertices and their control points for curves.
-                *   Example: `V<x0> <y0>c0x<cx0_0>c0y<cy0_0>c1x<cx1_0>c1y<cy1_0>V<x1> <y1>c0x<cx0_1>c0y<cy0_1>c1x<cx1_1>c1y<cy1_1>...`
-                *   Each `V<x> <y>` defines an anchor point of a vertex.
-                *   The string immediately following `V<x> <y>` (until the next `V` or end of `VertList`) is the control point data string for that vertex. It's typically prefixed with `c`.
-                *   This control point data string is parsed for key-value pairs like `c0x<val>`, `c0y<val>`, `c1x<val>`, `c1y<val>`.
-                    *   `(c0x, c0y)`: Control point for the curve segment *leaving* this vertex (i.e., "control point 1" if this vertex is the start of a segment).
-                    *   `(c1x, c1y)`: Control point for the curve segment *arriving* at this vertex (i.e., "control point 2" if this vertex is the end of a segment).
+            *   Child Element `<VertList>`: Contains vertex data. Each vertex entry starts with `V<x> <y>`.
+                *   The characters immediately following `V<x> <y>` (until the next `V` or the end of the `VertList` string) constitute the control point data string for that vertex.
+                *   This control point data string is a concatenation of keys like `c0x`, `c0y`, `c1x`, `c1y`, each immediately followed by its numeric value. For example, `c0x12.5c0y-4.5` means control point 0 has x=12.5 and y=-4.5.
+                *   Not all four control point components (`c0x`, `c0y`, `c1x`, `c1y`) need to be present for a given vertex.
+                *   Example: `V49 48c0x1.5c1x49.5c1y47.5V62 63c0x62.2c0y63.3`
+                    *   The first vertex is at (49, 48) with `c0x=1.5`, `c1x=49.5`, `c1y=47.5` (and `c0y` is undefined for this vertex).
+                    *   The second vertex is at (62, 63) with `c0x=62.2`, `c0y=63.3` (and `c1x`, `c1y` are undefined for this vertex).
             *   Child Element `<PrimList>`: A string defining geometric primitives using indices into the parsed `VertList`. Primitives are concatenated without spaces, e.g., `L0 1B1 2`.
                 *   `L<idx0> <idx1>`: A line segment from `VertList[idx0]` to `VertList[idx1]`.
                 *   `B<idx0> <idx1>`: A cubic Bezier curve segment from `VertList[idx0]` to `VertList[idx1]`.
                     *   It uses `(VertList[idx0].c0x, VertList[idx0].c0y)` as the first control point.
                     *   It uses `(VertList[idx1].c1x, VertList[idx1].c1y)` as the second control point.
                 *   Other primitives like `Q` (quadratic Bezier) or `C` (alternative cubic) might exist.
+        *   For `Type="Group"`:
+            *   This shape type represents a collection of other shapes.
+            *   Child Element `<Children>`: This element acts as a container for one or more nested `<Shape>` elements that belong to this group.
+                *   Example:
+                    ```xml
+                    <Shape Type="Group" CutIndex="0">
+                        <XForm>1 0 0 1 10 10</XForm> <!-- Group's transform -->
+                        <Children>
+                            <Shape Type="Rect" W="5" H="5" CutIndex="0">
+                                <XForm>1 0 0 1 2 2</XForm> <!-- Child's transform relative to group -->
+                            </Shape>
+                            <Shape Type="Ellipse" Rx="3" Ry="3" CutIndex="0">
+                                <XForm>1 0 0 1 -2 -2</XForm> <!-- Another child's transform -->
+                            </Shape>
+                        </Children>
+                    </Shape>
+                    ```
+            *   The group's own `<XForm>` is applied to all its children. Each child shape then has its own `<XForm>` which is relative to the group's transformed coordinate system.
+            *   When converting to SVG:
+                *   If a group contains only a single child, its transform is typically composed (multiplied) with the child's transform, and the child is rendered directly with the combined transform.
+                *   If a group contains multiple children, it's usually converted to an SVG `<g>` element, with the group's `<XForm>` applied to the `<g>`. The children are then rendered inside this `<g>` with their own respective transforms.
 *   `<Notes>`: (User notes, can be ignored for geometry)
 
 Example Structure (derived from `square.lbrn2` artifact):
@@ -103,7 +124,13 @@ Shape Representation in Detail:
       This represents a circle with radius 5, centered at (55,55).
 
 *   **Path (`Type="Path"`)**:
-    *   `<VertList>`: Contains vertex data. `V<x> <y>` specifies a vertex. Example: `V49 48c0x1c1x49c1y48V62 63c0x62c0y63c1x1`. This defines two vertices: (49,48) and (62,63). The `c...` data string is parsed for control points like `c0x`, `c0y`, `c1x`, `c1y`.
+    *   `<VertList>`: Contains vertex data. Each vertex entry starts with `V<x> <y>`.
+        *   The characters immediately following `V<x> <y>` (until the next `V` or the end of the `VertList` string) constitute the control point data string for that vertex.
+        *   This control point data string is a concatenation of keys like `c0x`, `c0y`, `c1x`, `c1y`, each immediately followed by its numeric value. For example, `c0x12.5c0y-4.5` means control point 0 has x=12.5 and y=-4.5.
+        *   Not all four control point components (`c0x`, `c0y`, `c1x`, `c1y`) need to be present for a given vertex.
+        *   Example: `V49 48c0x1.5c1x49.5c1y47.5V62 63c0x62.2c0y63.3`
+            *   The first vertex is at (49, 48) with `c0x=1.5`, `c1x=49.5`, `c1y=47.5` (and `c0y` is undefined for this vertex).
+            *   The second vertex is at (62, 63) with `c0x=62.2`, `c0y=63.3` (and `c1x`, `c1y` are undefined for this vertex).
     *   `<PrimList>`: Defines geometric primitives using indices into the parsed `VertList`. Example: `L0 1` means a line segment from the 0th vertex to the 1st vertex. `B0 1` means a Bezier curve from vertex 0 to vertex 1, using control points defined in their respective `VertList` entries.
 
 Parsing Considerations
@@ -155,11 +182,10 @@ LBRN2 to SVG:
         *   If a path closes on itself (e.g. last primitive's endpoint is the first primitive's start point), a `Z` is appended to the SVG path data.
 3.  **SVG Structure**:
     *   An overall `<svg>` tag with `width`, `height`, and `viewBox`.
-    *   The `viewBox` should encompass all transformed shapes. For single shapes from artifacts (e.g., centered at `(e,f)` from XForm, with dimensions `W,H`):
-        *   `viewBox_x = e - W/2`
-        *   `viewBox_y_svg_origin = -(f + H/2)` (Y is flipped and refers to top-left of viewBox)
-        *   `viewBox_width = W`
-        *   `viewBox_height = H`
+    *   The `viewBox` is calculated to encompass all transformed shapes. First, the overall bounding box of all content is determined in LightBurn's coordinate system (where the Y-axis typically points upwards), resulting in `minX, minY, maxX, maxY` values.
+    *   The SVG `viewBox` attribute is then set to a string `"${minX} ${minY} ${width} ${height}"`, where `width = maxX - minX` and `height = maxY - minY`.
+    *   The `width` and `height` attributes of the `<svg>` element are typically set to `"${width}mm"` and `"${height}mm"` respectively.
+    *   The individual shape transformations (e.g., `matrix(a, -b, c, -d, e, -f)`) correctly map the shapes from LightBurn's Y-up system to SVG's Y-down system within this defined `viewBox`.
     *   SVG `width` and `height` attributes often match `viewBox_width`, `viewBox_height` with units (e.g., "mm").
 4.  **Styling**: SVG elements will need `fill`, `stroke`, `stroke-width`. These can be default values (e.g., `fill="none" stroke="black" stroke-width="0.05mm"`) if not derived from LBRN2 `CutSetting`.
 
