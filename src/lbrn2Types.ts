@@ -64,7 +64,7 @@ export interface Lbrn2Group extends Lbrn2ShapeBase {
   Children: Lbrn2Shape[];
 }
 
-export interface Lbrn2Bitmap extends Lbrn2ShapeBase {
+interface Lbrn2Bitmap extends Lbrn2ShapeBase {
   Type: "Bitmap";
   W: number;
   H: number;

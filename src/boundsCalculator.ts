@@ -1,7 +1,7 @@
 import type { Lbrn2Shape, Lbrn2XForm } from "./lbrn2Types";
 
 // Compose two transforms
-export function composeXForms(g: Lbrn2XForm, c: Lbrn2XForm): Lbrn2XForm {
+function composeXForms(g: Lbrn2XForm, c: Lbrn2XForm): Lbrn2XForm {
   return {
     a: g.a * c.a + g.c * c.b,
     b: g.b * c.a + g.d * c.b,
