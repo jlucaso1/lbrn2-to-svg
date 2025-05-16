@@ -259,10 +259,21 @@ export function parseLbrn2(xmlString: string): LightBurnProjectFile {
             shape.parsedVerts = parseVertListString(shape.VertList);
           }
         } else if (shape.Type === "Group" && shape.Children) {
-          // Children can be a single shape or array
-          let childrenArr = shape.Children.Shape;
-          if (!Array.isArray(childrenArr)) {
-            childrenArr = [childrenArr];
+          // Children can be a single shape, array, or { Shape: ... }
+          let childrenArr: any[] = [];
+          if (Array.isArray(shape.Children)) {
+            // Already an array (shouldn't happen in LBRN2, but handle gracefully)
+            childrenArr = shape.Children;
+          } else if (shape.Children.Shape !== undefined) {
+            // Standard LBRN2: Children.Shape is single or array
+            if (Array.isArray(shape.Children.Shape)) {
+              childrenArr = shape.Children.Shape;
+            } else {
+              childrenArr = [shape.Children.Shape];
+            }
+          } else if (shape.Children) {
+            // Fallback: treat as single child
+            childrenArr = [shape.Children];
           }
           shape.Children = childrenArr.map(parseShapeRecursive);
         }
