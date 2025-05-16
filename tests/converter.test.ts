@@ -133,6 +133,7 @@ describe("LBRN2 to SVG Converter", () => {
     "bezier_missing_cp",
     "group_empty",
     "group_single_child",
+    "word",
   ];
 
   for (const tc of testCases) {

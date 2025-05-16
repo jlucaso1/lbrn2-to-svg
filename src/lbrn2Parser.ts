@@ -310,12 +310,36 @@ export function parseLbrn2(xmlString: string): LightBurnProjectFile {
         parsed.LightBurnProject.Shape = [parsed.LightBurnProject.Shape];
       }
       const parseShapeRecursive = (shape: any): any => {
+        // Handle Text with BackupPath: substitute Text shape with Path from BackupPath
+        if (
+          shape.Type === "Text" &&
+          shape.HasBackupPath === 1 &&
+          shape.BackupPath &&
+          typeof shape.BackupPath === "object" &&
+          shape.BackupPath.Type === "Path" &&
+          typeof shape.BackupPath.XForm === "string" &&
+          typeof shape.BackupPath.VertList === "string" &&
+          typeof shape.BackupPath.PrimList === "string"
+        ) {
+          // Create a new Path shape from BackupPath data
+          const backupData = shape.BackupPath;
+          shape = {
+            Type: "Path",
+            CutIndex: backupData.CutIndex !== undefined ? backupData.CutIndex : shape.CutIndex,
+            XFormVal: backupData.XForm,
+            XForm: parseXFormString(backupData.XForm),
+            VertList: backupData.VertList,
+            PrimList: backupData.PrimList,
+          };
+        }
+      
+        // Parse XForm for current shape
         if (shape.XFormVal) {
           shape.XForm = parseXFormString(shape.XFormVal);
         } else if (shape.XForm && typeof shape.XForm === "string") {
           shape.XForm = parseXFormString(shape.XForm as unknown as string);
         }
-
+      
         if (shape.Type === "Path") {
           if (shape.VertList && typeof shape.VertList === "string") {
             shape.parsedVerts = parseVertListString(shape.VertList);
@@ -323,6 +347,8 @@ export function parseLbrn2(xmlString: string): LightBurnProjectFile {
           if (shape.PrimList && typeof shape.PrimList === "string") {
             shape.parsedPrimitives = parsePrimListToIR(shape.PrimList);
           }
+          // Skip Path shapes without XForm
+          if (!shape.XForm) return null;
         } else if (shape.Type === "Group" && shape.Children) {
           // Children can be a single shape, array, or { Shape: ... }
           let childrenArr: any[] = [];
@@ -340,8 +366,23 @@ export function parseLbrn2(xmlString: string): LightBurnProjectFile {
             // Fallback: treat as single child
             childrenArr = [shape.Children];
           }
-          shape.Children = childrenArr.map(parseShapeRecursive);
+          shape.Children = childrenArr
+            .map(parseShapeRecursive)
+            .filter(Boolean); // Remove null children
+          // Skip Group shapes without XForm
+          if (!shape.XForm) return null;
+        } else if ((shape.Type === "Rect" || shape.Type === "Ellipse") && !shape.XForm) {
+          // Skip basic shapes without XForm
+          return null;
+        } else if (shape.Type === "Text") {
+          // If it's still a Text shape, it means no usable BackupPath; let SVG converter skip it.
         }
+      
+        // Ensure all non-Text shapes have a parsed XForm
+        if (shape.Type !== "Text" && !shape.XForm) {
+          return null;
+        }
+      
         return shape;
       };
 
