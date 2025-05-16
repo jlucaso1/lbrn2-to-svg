@@ -1,12 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <LightBurnProject AppVersion="1.7.08" FormatVersion="1">
-    <CutSetting type="Cut"><index Value="0"/><name Value="C00"/></CutSetting>
-    <Shape Type="Group" CutIndex="0">
-        <XForm>2 0 0 2 10 10</XForm> <!-- Scale 2x, Translate 10,10 -->
-        <Children>
-            <Shape Type="Rect" CutIndex="0" W="10" H="10">
-                <XForm>1 0 0 1 5 5</XForm> <!-- Translate 5,5 -->
-            </Shape>
-        </Children>
-    </Shape>
+  <CutSetting type="Cut">
+    <index Value="0"/>
+    <name Value="C00"/>
+  </CutSetting>
+  <Shape Type="Group" CutIndex="0">
+    <XForm>2 0 0 2 10 10</XForm>
+    <Children>
+      <Shape Type="Rect" CutIndex="0" W="10" H="10">
+        <XForm>1 0 0 1 5 5</XForm>
+      </Shape>
+    </Children>
+  </Shape>
 </LightBurnProject>
