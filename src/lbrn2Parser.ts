@@ -107,6 +107,50 @@ function parseControlPointData(
   return data;
 }
 
+// Parse PrimList string into IR array of primitives
+import type { PathPrimitiveIR } from "./lbrn2Types";
+function parsePrimListToIR(primListStr: string): PathPrimitiveIR[] {
+  const primitives: PathPrimitiveIR[] = [];
+  let i = 0;
+  const len = primListStr.length;
+
+  function parseNextInt(): number | null {
+    while (i < len && /\s/.test(primListStr[i] ?? "")) i++;
+    let numStr = "";
+    while (i < len && /[0-9]/.test(primListStr[i] ?? "")) {
+      numStr += primListStr[i];
+      i++;
+    }
+    return numStr.length > 0 ? Number(numStr) : null;
+  }
+
+  while (i < len) {
+    while (i < len && /\s/.test(primListStr[i] ?? "")) i++;
+    if (i >= len) break;
+    const type = primListStr[i];
+    if (type === undefined || !/[A-Za-z]/.test(type)) {
+      i++;
+      continue;
+    }
+    i++;
+    const args: number[] = [];
+    for (let argCount = 0; argCount < 4; argCount++) {
+      const num = parseNextInt();
+      if (num !== null) {
+        args.push(num);
+      } else {
+        break;
+      }
+    }
+    if (type === "L" && args.length === 2 && args[0] !== undefined && args[1] !== undefined) {
+      primitives.push({ type: "Line", startIdx: args[0] as number, endIdx: args[1] as number });
+    } else if (type === "B" && args.length === 2 && args[0] !== undefined && args[1] !== undefined) {
+      primitives.push({ type: "Bezier", startIdx: args[0] as number, endIdx: args[1] as number });
+    }
+    // Extend for Q, C, etc. as needed
+  }
+  return primitives;
+}
 function parseVertListString(vertListStr: string): Lbrn2Vec2[] {
   const vertices: Lbrn2Vec2[] = [];
   let i = 0;
@@ -257,6 +301,9 @@ export function parseLbrn2(xmlString: string): LightBurnProjectFile {
         if (shape.Type === "Path") {
           if (shape.VertList && typeof shape.VertList === "string") {
             shape.parsedVerts = parseVertListString(shape.VertList);
+          }
+          if (shape.PrimList && typeof shape.PrimList === "string") {
+            shape.parsedPrimitives = parsePrimListToIR(shape.PrimList);
           }
         } else if (shape.Type === "Group" && shape.Children) {
           // Children can be a single shape, array, or { Shape: ... }

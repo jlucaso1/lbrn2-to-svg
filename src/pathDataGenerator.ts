@@ -2,11 +2,6 @@ import type { Lbrn2Path } from "./lbrn2Types";
 
 type PrimToken = { type: string; args: number[] };
 
-const PRIM_LINE = "L";
-const PRIM_BEZIER = "B";
-const PRIM_QUADRATIC = "Q";
-const PRIM_CUBIC = "C";
-
 const F = (n: number) => n.toFixed(6);
 
 export function tokenizePrimList(primList: string): PrimToken[] {
@@ -50,11 +45,11 @@ export function tokenizePrimList(primList: string): PrimToken[] {
 }
 
 export function parsePathPrimitives(path: Lbrn2Path, log: string[]): string {
-  if (!path.PrimList || !path.parsedVerts || path.parsedVerts.length === 0) {
+  if (!path.parsedPrimitives || !path.parsedVerts || path.parsedVerts.length === 0) {
     log.push(
       `Path ${
         path.PrimList || "PrimList missing"
-      } or parsedVerts missing/empty, skipping.`
+      } or parsedVerts/parsedPrimitives missing/empty, skipping.`
     );
     return "";
   }
@@ -62,56 +57,41 @@ export function parsePathPrimitives(path: Lbrn2Path, log: string[]): string {
   let firstMoveToIdx: number | null = null;
   let currentLastIdx: number | null = null;
 
-  const tokens = tokenizePrimList(path.PrimList);
-
-  for (const token of tokens) {
-    const primType = token.type;
-    const args = token.args;
-
-    if (primType === PRIM_LINE) {
-      if (args.length !== 2) {
-        log.push(`Line primitive L needs 2 args, got ${args.length}`);
+  for (const prim of path.parsedPrimitives) {
+    if (prim.type === "Line") {
+      const idx0 = prim.startIdx;
+      const idx1 = prim.endIdx;
+      if (idx0 < 0 || idx1 < 0) {
+        log.push(`Invalid indices for Line: ${idx0}, ${idx1}`);
         continue;
       }
-      const [idx0, idx1] = args;
-      const idx0num = typeof idx0 === "number" ? idx0 : -1;
-      const idx1num = typeof idx1 === "number" ? idx1 : -1;
-      if (idx0num < 0 || idx1num < 0) {
-        log.push(`Invalid indices for L: ${idx0}, ${idx1}`);
-        continue;
-      }
-      const p0 = path.parsedVerts[idx0num];
-      const p1 = path.parsedVerts[idx1num];
+      const p0 = path.parsedVerts[idx0];
+      const p1 = path.parsedVerts[idx1];
       if (!p0 || !p1) {
-        log.push(`Invalid vertex index for L ${idx0} ${idx1}`);
+        log.push(`Invalid vertex index for Line ${idx0} ${idx1}`);
         continue;
       }
 
       if (firstMoveToIdx === null) {
         d += `M${F(p0.x)},${F(p0.y)}`;
-        firstMoveToIdx = idx0num;
-      } else if (currentLastIdx !== idx0num) {
+        firstMoveToIdx = idx0;
+      } else if (currentLastIdx !== idx0) {
         d += ` M${F(p0.x)},${F(p0.y)}`;
       }
       d += ` L${F(p1.x)},${F(p1.y)}`;
-      currentLastIdx = idx1num;
-    } else if (primType === PRIM_BEZIER) {
-      if (args.length !== 2) {
-        log.push(`Bezier primitive B needs 2 args, got ${args.length}`);
+      currentLastIdx = idx1;
+    } else if (prim.type === "Bezier") {
+      const idx0 = prim.startIdx;
+      const idx1 = prim.endIdx;
+      if (idx0 < 0 || idx1 < 0) {
+        log.push(`Invalid indices for Bezier: ${idx0}, ${idx1}`);
         continue;
       }
-      const [idx0, idx1] = args;
-      const idx0numB = typeof idx0 === "number" ? idx0 : -1;
-      const idx1numB = typeof idx1 === "number" ? idx1 : -1;
-      if (idx0numB < 0 || idx1numB < 0) {
-        log.push(`Invalid indices for B: ${idx0}, ${idx1}`);
-        continue;
-      }
-      const p0 = path.parsedVerts[idx0numB];
-      const p1 = path.parsedVerts[idx1numB];
+      const p0 = path.parsedVerts[idx0];
+      const p1 = path.parsedVerts[idx1];
 
       if (!p0 || !p1) {
-        log.push(`Invalid vertex index for B ${idx0} ${idx1}`);
+        log.push(`Invalid vertex index for Bezier ${idx0} ${idx1}`);
         continue;
       }
       if (
@@ -121,56 +101,36 @@ export function parsePathPrimitives(path: Lbrn2Path, log: string[]): string {
         p1.c1y === undefined
       ) {
         log.push(
-          `Bezier primitive B ${idx0} ${idx1} missing control points. P0: ${JSON.stringify(
+          `Bezier primitive ${idx0} ${idx1} missing control points. P0: ${JSON.stringify(
             p0
           )}, P1: ${JSON.stringify(p1)}. Falling back to Line.`
         );
         if (firstMoveToIdx === null) {
           d += `M${F(p0.x)},${F(p0.y)}`;
-          firstMoveToIdx = idx0numB;
-        } else if (currentLastIdx !== idx0numB) {
+          firstMoveToIdx = idx0;
+        } else if (currentLastIdx !== idx0) {
           d += ` M${F(p0.x)},${F(p0.y)}`;
         }
         d += ` L${F(p1.x)},${F(p1.y)}`;
-        currentLastIdx = idx1numB;
+        currentLastIdx = idx1;
         continue;
       }
 
       if (firstMoveToIdx === null) {
         d += `M${F(p0.x)},${F(p0.y)}`;
-        firstMoveToIdx = idx0numB;
-      } else if (currentLastIdx !== idx0numB) {
+        firstMoveToIdx = idx0;
+      } else if (currentLastIdx !== idx0) {
         d += ` M${F(p0.x)},${F(p0.y)}`;
       }
       d += ` C${F(p0.c0x)},${F(p0.c0y)} ${F(p1.c1x)},${F(p1.c1y)} ${F(
         p1.x
       )},${F(p1.y)}`;
-      currentLastIdx = idx1numB;
-    } else if (primType === PRIM_QUADRATIC) {
-      if (args.length !== 2 && args.length !== 3) {
-        log.push(`Quadratic Bezier Q needs 2 or 3 args, got ${args.length}`);
-        continue;
-      }
-      log.push(
-        `Quadratic Bezier Q primitive not fully implemented. Args: ${args.join(
-          ","
-        )}`
-      );
-    } else if (primType === PRIM_CUBIC) {
-      if (args.length !== 3 && args.length !== 4) {
-        log.push(`Cubic Bezier C needs 3 or 4 args, got ${args.length}`);
-        continue;
-      }
-      log.push(
-        `Cubic Bezier C primitive (distinct from B) not fully implemented. Args: ${args.join(
-          ","
-        )}`
-      );
+      currentLastIdx = idx1;
     } else {
       log.push(
-        `Unknown or unsupported path primitive: ${primType} with args [${args.join(
-          ", "
-        )}]`
+        `Unknown or unsupported path primitive type: ${
+          (prim as any).type ?? "unknown"
+        }`
       );
     }
   }

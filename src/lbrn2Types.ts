@@ -50,7 +50,11 @@ export interface Lbrn2Path extends Lbrn2ShapeBase {
   VertList: string; // Raw VertList string
   PrimList: string; // Raw PrimList string
   parsedVerts?: Lbrn2Vec2[];
-  // Further parsed PrimList structure could be added
+  /**
+   * Array of parsed primitives from PrimList.
+   * Each primitive is a structured object describing the type and indices.
+   */
+  parsedPrimitives?: PathPrimitiveIR[];
 }
 
 export interface Lbrn2Group extends Lbrn2ShapeBase {
@@ -69,3 +73,12 @@ export interface LightBurnProjectFile {
     // Other top-level elements like Thumbnail, Notes, etc.
   };
 }
+
+/**
+ * Intermediate Representation for parsed path primitives.
+ */
+export type PathPrimitiveIR =
+  | { type: "Line"; startIdx: number; endIdx: number }
+  | { type: "Bezier"; startIdx: number; endIdx: number }
+  // Extend with more types as needed (Quadratic, Cubic, etc.)
+  ;
