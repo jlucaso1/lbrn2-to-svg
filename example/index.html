@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LBRN2 to SVG Converter Example</title>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Helvetica, Arial, sans-serif;
+        margin: 20px;
+        line-height: 1.6;
+        background-color: #f4f7f6;
+        color: #333;
+      }
+      .container {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: #fff;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      }
+      h1 {
+        color: #2c3e50;
+        text-align: center;
+        margin-bottom: 30px;
+      }
+      label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: bold;
+        color: #555;
+      }
+      input[type="file"] {
+        display: block;
+        width: 100%;
+        padding: 10px;
+        margin-bottom: 20px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        box-sizing: border-box;
+      }
+      #svg-container {
+        border: 1px solid #ccc;
+        margin-top: 20px;
+        margin-bottom: 20px;
+        min-height: 100px;
+        max-width: 100%;
+        overflow: auto;
+        background-color: #fdfdfd;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+      #svg-container svg {
+        max-width: 100%;
+        height: auto;
+        display: block;
+        margin: 10px;
+      }
+      #svg-container p {
+        padding: 20px;
+        color: #777;
+        text-align: center;
+      }
+      a#download-link {
+        display: inline-block;
+        margin-top: 10px;
+        padding: 10px 18px;
+        background-color: #28a745;
+        color: white;
+        text-decoration: none;
+        border-radius: 4px;
+        transition: background-color 0.2s ease-in-out;
+      }
+      a#download-link:hover {
+        background-color: #218838;
+      }
+      a#download-link[style*="display:none"] {
+        display: none !important;
+      }
+      .logs {
+        margin-top: 20px;
+        padding: 10px;
+        border-radius: 4px;
+        font-family: monospace;
+        font-size: 0.9em;
+      }
+      .error-log {
+        background-color: #ffebee;
+        border: 1px solid #ef9a9a;
+        color: #c62828;
+      }
+      .warning-log {
+        background-color: #fff3e0;
+        border: 1px solid #ffcc80;
+        color: #e65100;
+      }
+      .hidden {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>LBRN2 to SVG Converter</h1>
+
+      <label for="lbrn2-file">Upload LBRN2 File:</label>
+      <input type="file" id="lbrn2-file" accept=".lbrn2" />
+
+      <div id="svg-container">
+        <p>SVG will be rendered here once a .lbrn2 file is selected.</p>
+      </div>
+
+      <a id="download-link" href="#" download="converted.svg" class="hidden"
+        >Download SVG</a
+      >
+
+      <div id="warning-log" class="logs warning-log hidden"></div>
+      <div id="error-log" class="logs error-log hidden"></div>
+    </div>
+
+    <script type="module">
+      import { parseLbrn2, lbrn2ToSvg } from "https://esm.sh/lbrn2-to-svg";
+
+      const fileInput = document.getElementById("lbrn2-file");
+      const svgContainer = document.getElementById("svg-container");
+      const downloadLink = document.getElementById("download-link");
+      const errorLogElement = document.getElementById("error-log");
+      const warningLogElement = document.getElementById("warning-log");
+
+      let currentObjectUrl = null;
+
+      fileInput.addEventListener("change", async (event) => {
+        const file = event.target.files[0];
+
+        svgContainer.innerHTML = "<p>Processing file...</p>";
+        downloadLink.classList.add("hidden");
+        errorLogElement.classList.add("hidden");
+        errorLogElement.textContent = "";
+        warningLogElement.classList.add("hidden");
+        warningLogElement.innerHTML = "";
+
+        if (currentObjectUrl) {
+          URL.revokeObjectURL(currentObjectUrl);
+          currentObjectUrl = null;
+        }
+
+        if (!file) {
+          svgContainer.innerHTML =
+            "<p>No file selected. Please choose a .lbrn2 file.</p>";
+          return;
+        }
+
+        if (!file.name.toLowerCase().endsWith(".lbrn2")) {
+          errorLogElement.textContent =
+            "Invalid file type. Please select a .lbrn2 file.";
+          errorLogElement.classList.remove("hidden");
+          svgContainer.innerHTML =
+            "<p>Invalid file type. Please select a .lbrn2 file.</p>";
+          return;
+        }
+
+        const reader = new FileReader();
+
+        reader.onload = async (e) => {
+          const lbrn2Xml = e.target.result;
+
+          try {
+            const originalConsoleWarn = console.warn;
+            const conversionWarnings = [];
+            console.warn = (...args) => {
+              conversionWarnings.push(args.map(String).join(" "));
+              originalConsoleWarn.apply(console, args);
+            };
+
+            const project = parseLbrn2(lbrn2Xml);
+            const svgString = lbrn2ToSvg(project);
+
+            console.warn = originalConsoleWarn;
+
+            if (conversionWarnings.length > 0) {
+              warningLogElement.innerHTML =
+                "<strong>Conversion Warnings:</strong><br>" +
+                conversionWarnings.join("<br>");
+              warningLogElement.classList.remove("hidden");
+            }
+
+            svgContainer.innerHTML = svgString;
+
+            const blob = new Blob([svgString], {
+              type: "image/svg+xml;charset=utf-8",
+            });
+            currentObjectUrl = URL.createObjectURL(blob);
+
+            downloadLink.href = currentObjectUrl;
+            downloadLink.download = file.name.replace(/\.[^/.]+$/, "") + ".svg";
+            downloadLink.classList.remove("hidden");
+          } catch (error) {
+            console.error("Conversion failed:", error);
+            const errorMessage = `Error during conversion: ${error.message}. Check console for more details.`;
+            svgContainer.innerHTML = `<p>${errorMessage}</p>`;
+            errorLogElement.textContent = errorMessage;
+            errorLogElement.classList.remove("hidden");
+          }
+        };
+
+        reader.onerror = () => {
+          const readErrorMessage = "Error reading the selected file.";
+          svgContainer.innerHTML = `<p>${readErrorMessage}</p>`;
+          errorLogElement.textContent = readErrorMessage;
+          errorLogElement.classList.remove("hidden");
+        };
+
+        reader.readAsText(file);
+      });
+    </script>
+  </body>
+</html>
