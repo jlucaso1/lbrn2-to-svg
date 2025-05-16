@@ -31,26 +31,85 @@ function getCutSettingStyle(cutIndex: number, cutSettings: Lbrn2CutSetting[] | u
   return `stroke:${color};stroke-width:${strokeWidth};fill:none`;
 }
 
+type PrimToken = { type: string; args: number[] };
+
+// Tokenizer/parser for PrimList: "L0 1B1 2" => [{type: 'L', args: [0,1]}, ...]
+function tokenizePrimList(primList: string): PrimToken[] {
+  const tokens: PrimToken[] = [];
+  let i = 0;
+  const len = primList.length;
+  while (i < len) {
+    // Skip whitespace
+    while (i < len) {
+      const ch = primList[i];
+      if (ch !== undefined && /\s/.test(ch)) {
+        i++;
+      } else {
+        break;
+      }
+    }
+    if (i >= len) break;
+    const type = primList[i];
+    if (type === undefined || !/[A-Za-z]/.test(type)) {
+      i++;
+      continue;
+    }
+    i++;
+    // Parse up to 4 integer arguments (indices)
+    const args: number[] = [];
+    let argCount = 0;
+    while (argCount < 4) {
+      // Skip whitespace
+      while (i < len) {
+        const ch = primList[i];
+        if (ch !== undefined && /\s/.test(ch)) {
+          i++;
+        } else {
+          break;
+        }
+      }
+      // Parse number
+      let numStr = '';
+      while (i < len) {
+        const ch = primList[i];
+        if (ch !== undefined && /[0-9]/.test(ch)) {
+          numStr += ch;
+          i++;
+        } else {
+          break;
+        }
+      }
+      if (numStr.length > 0) {
+        args.push(Number(numStr));
+        argCount++;
+      } else {
+        break;
+      }
+    }
+    if (type !== undefined) {
+      tokens.push({ type, args });
+    }
+  }
+  return tokens;
+}
+
 function parsePathPrimitives(path: Lbrn2Path, log: string[]): string {
   if (!path.PrimList || !path.parsedVerts || path.parsedVerts.length === 0) {
     log.push(`Path ${path.PrimList || 'PrimList missing'} or parsedVerts missing/empty, skipping.`);
     return "";
   }
   let d = "";
-  // Regex to match primitives like L0 1, B0 1, etc.
-  // It captures the type (L, B, C, Q) and up to 4 numerical arguments.
-  const primPattern = /([LBCQ])(\d+)(?:\s*(\d+))?(?:\s*(\d+))?(?:\s*(\d+))?/g;
-  let match: RegExpExecArray | null;
   let firstMoveToIdx: number | null = null;
   let currentLastIdx: number | null = null; // Index of the endpoint of the last segment
 
-  while ((match = primPattern.exec(path.PrimList)) !== null) {
-    const primType = match[1];
-    // Collect actual arguments from the regex match groups
-    const args = match.slice(2).filter(arg => arg !== undefined).map(Number);
+  const tokens = tokenizePrimList(path.PrimList);
+
+  for (const token of tokens) {
+    const primType = token.type;
+    const args = token.args;
 
     if (primType === "L") {
-      if (args.length !== 2) { log.push(`Line primitive L needs 2 args, got ${args.length} for match ${match[0]}`); continue; }
+      if (args.length !== 2) { log.push(`Line primitive L needs 2 args, got ${args.length}`); continue; }
       const [idx0, idx1] = args;
       const idx0num = typeof idx0 === "number" ? idx0 : -1;
       const idx1num = typeof idx1 === "number" ? idx1 : -1;
@@ -69,7 +128,7 @@ function parsePathPrimitives(path: Lbrn2Path, log: string[]): string {
       d += ` L${F(p1.x)},${F(p1.y)}`;
       currentLastIdx = idx1num;
     } else if (primType === "B") { // LBRN2 Bezier (cubic)
-      if (args.length !== 2) { log.push(`Bezier primitive B needs 2 args, got ${args.length} for match ${match[0]}`); continue; }
+      if (args.length !== 2) { log.push(`Bezier primitive B needs 2 args, got ${args.length}`); continue; }
       const [idx0, idx1] = args;
       const idx0numB = typeof idx0 === "number" ? idx0 : -1;
       const idx1numB = typeof idx1 === "number" ? idx1 : -1;
@@ -101,17 +160,10 @@ function parsePathPrimitives(path: Lbrn2Path, log: string[]): string {
       d += ` C${F(p0.c0x)},${F(p0.c0y)} ${F(p1.c1x)},${F(p1.c1y)} ${F(p1.x)},${F(p1.y)}`;
       currentLastIdx = idx1numB;
     } else if (primType === "Q") { // LBRN2 Quadratic Bezier
-      // Assuming Q in LBRN2 is Q <fromIdx> <ctrlIdx> <toIdx> (SVG: M from Q ctrl to)
-      // Or more likely: Q <ctrlIdx> <toIdx> (from previous point) similar to SVG
-      // For now, let's assume it means Q from_prev_point ctrlIdx toIdx (args: ctrlIdx, toIdx)
       if (args.length !== 2 && args.length !== 3) { log.push(`Quadratic Bezier Q needs 2 or 3 args, got ${args.length}`); continue; }
-      // This part is a stub, actual LBRN2 Q format needs verification if encountered.
       log.push(`Quadratic Bezier Q primitive not fully implemented. Args: ${args.join(',')}`);
       // Fallback or simple implementation
     } else if (primType === "C") { // LBRN2 Cubic Bezier (if different from 'B')
-      // Assuming C in LBRN2 is C <fromIdx> <ctrl1Idx> <ctrl2Idx> <toIdx> (SVG: M from C ctrl1 ctrl2 to)
-      // Or more likely: C <ctrl1Idx> <ctrl2Idx> <toIdx> (from previous point) similar to SVG
-      // For now, let's assume it means C from_prev_point ctrl1Idx ctrl2Idx toIdx (args: c1idx, c2idx, toidx)
       if (args.length !== 3 && args.length !== 4) { log.push(`Cubic Bezier C needs 3 or 4 args, got ${args.length}`); continue; }
       log.push(`Cubic Bezier C primitive (distinct from B) not fully implemented. Args: ${args.join(',')}`);
     } else {
@@ -244,11 +296,10 @@ function getTransformedBounds(shape: Lbrn2Shape): { minX: number, minY: number, 
     const path = shape as Lbrn2Path;
     if (!path.parsedVerts || !path.PrimList) return null;
 
-    const primPattern = /([LBCQ])(\d+)(?:\s*(\d+))?(?:\s*(\d+))?(?:\s*(\d+))?/g;
-    let match: RegExpExecArray | null;
-    while ((match = primPattern.exec(path.PrimList)) !== null) {
-        const primType = match[1];
-        const args = match.slice(2).filter(arg => arg !== undefined).map(Number);
+    const tokens = tokenizePrimList(path.PrimList);
+    for (const token of tokens) {
+        const primType = token.type;
+        const args = token.args;
 
         if (primType === "L") {
             if (args.length === 2) {

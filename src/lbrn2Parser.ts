@@ -61,15 +61,38 @@ function parseControlPointData(cpString: string | undefined): Partial<Pick<Lbrn2
   if (!cpString || !cpString.startsWith('c')) {
     return data;
   }
-  // Regex to find c0x, c0y, c1x, c1y and their values
-  // Example: c0x12.3c0y45.6 (key "c0x", value "12.3"; key "c0y", value "45.6")
-  const cpRegex = /(c0x|c0y|c1x|c1y)([-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?)/g;
-  let matchCp: RegExpExecArray | null;
-  while ((matchCp = cpRegex.exec(cpString)) !== null) {
-    const key = matchCp[1] as 'c0x' | 'c0y' | 'c1x' | 'c1y';
-    const value = parseFloat(matchCp[2] ?? "");
-    if (!isNaN(value)) {
-      data[key] = value;
+  // Explicit parser: scan for c0x/c0y/c1x/c1y followed by a number
+  let i = 0;
+  while (i < cpString.length) {
+    if (cpString.startsWith('c0x', i) || cpString.startsWith('c0y', i) ||
+        cpString.startsWith('c1x', i) || cpString.startsWith('c1y', i)) {
+      const key = cpString.slice(i, i + 3) as 'c0x' | 'c0y' | 'c1x' | 'c1y';
+      i += 3;
+      // Parse number (may include sign, decimal, exponent)
+      let numStr = '';
+      while (i < cpString.length) {
+        const ch = cpString[i];
+        if (ch !== undefined) {
+          if (
+            ch === '-' || ch === '+' ||
+            (ch >= '0' && ch <= '9') ||
+            ch === '.' || ch === 'e' || ch === 'E'
+          ) {
+            numStr += ch;
+            i++;
+          } else {
+            break;
+          }
+        } else {
+          break;
+        }
+      }
+      const value = parseFloat(numStr);
+      if (!isNaN(value)) {
+        data[key] = value;
+      }
+    } else {
+      i++;
     }
   }
   return data;
@@ -77,15 +100,91 @@ function parseControlPointData(cpString: string | undefined): Partial<Pick<Lbrn2
 
 function parseVertListString(vertListStr: string): Lbrn2Vec2[] {
   const vertices: Lbrn2Vec2[] = [];
-  // Regex to capture V x y and the following c... string until the next V or end of string
-  const regex = /V\s*([-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?)\s*([-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?)([^\sV]*)/g;
-  let match: RegExpExecArray | null;
-  while ((match = regex.exec(vertListStr)) !== null) {
-    const xStr = match[1];
-    const yStr = match[2];
-    const cpStr = match[3]; // This will be like "c0x..." or "c..." or empty
-    const controlPoints = parseControlPointData(cpStr);
-    vertices.push({ x: parseFloat(xStr ?? ""), y: parseFloat(yStr ?? ""), ...controlPoints });
+  let i = 0;
+  const len = vertListStr.length;
+  while (i < len) {
+    // Skip whitespace
+    while (i < len) {
+      const ch = vertListStr[i];
+      if (ch !== undefined && /\s/.test(ch)) {
+        i++;
+      } else {
+        break;
+      }
+    }
+    if (i < len && vertListStr[i] === 'V') {
+      i++;
+      // Skip whitespace
+      while (i < len) {
+        const ch = vertListStr[i];
+        if (ch !== undefined && /\s/.test(ch)) {
+          i++;
+        } else {
+          break;
+        }
+      }
+      // Parse x
+      let xStr = '';
+      while (i < len) {
+        const ch = vertListStr[i];
+        if (ch !== undefined) {
+          if (
+            ch === '-' || ch === '+' ||
+            (ch >= '0' && ch <= '9') ||
+            ch === '.' || ch === 'e' || ch === 'E'
+          ) {
+            xStr += ch;
+            i++;
+          } else {
+            break;
+          }
+        } else {
+          break;
+        }
+      }
+      // Skip whitespace
+      while (i < len) {
+        const ch = vertListStr[i];
+        if (ch !== undefined && /\s/.test(ch)) {
+          i++;
+        } else {
+          break;
+        }
+      }
+      // Parse y
+      let yStr = '';
+      while (i < len) {
+        const ch = vertListStr[i];
+        if (ch !== undefined) {
+          if (
+            ch === '-' || ch === '+' ||
+            (ch >= '0' && ch <= '9') ||
+            ch === '.' || ch === 'e' || ch === 'E'
+          ) {
+            yStr += ch;
+            i++;
+          } else {
+            break;
+          }
+        } else {
+          break;
+        }
+      }
+      // Parse control point string (until next 'V' or end)
+      let cpStr = '';
+      while (i < len && vertListStr[i] !== 'V') {
+        const ch = vertListStr[i];
+        if (ch !== undefined) {
+          cpStr += ch;
+        }
+        i++;
+      }
+      const controlPoints = parseControlPointData(cpStr.trim());
+      vertices.push({ x: parseFloat(xStr), y: parseFloat(yStr), ...controlPoints });
+    } else {
+      // Skip unknown/invalid chars
+      i++;
+    }
   }
   return vertices;
 }
