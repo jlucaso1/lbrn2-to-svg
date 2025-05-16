@@ -50,13 +50,16 @@
         border: 1px solid #ccc;
         margin-top: 20px;
         margin-bottom: 20px;
-        min-height: 100px;
+        min-height: 200px;
+        min-width: 200px;
         max-width: 100%;
         overflow: auto;
         background-color: #fdfdfd;
         display: flex;
         justify-content: center;
         align-items: center;
+        resize: both;
+        box-sizing: border-box;
       }
       #svg-container svg {
         max-width: 100%;
@@ -103,6 +106,7 @@
         color: #e65100;
       }
       .hidden {
+        display: none !important;
         display: none;
       }
     </style>
@@ -114,6 +118,10 @@
       <label for="lbrn2-file">Upload LBRN2 File:</label>
       <input type="file" id="lbrn2-file" accept=".lbrn2" />
 
+      <div id="zoom-controls" class="hidden" style="display: flex; gap: 10px; justify-content: center; margin-bottom: 10px;">
+        <button id="zoom-in-btn" type="button">Zoom In +</button>
+        <button id="zoom-out-btn" type="button">Zoom Out −</button>
+      </div>
       <div id="svg-container">
         <p>SVG will be rendered here once a .lbrn2 file is selected.</p>
       </div>
@@ -134,8 +142,46 @@
       const downloadLink = document.getElementById("download-link");
       const errorLogElement = document.getElementById("error-log");
       const warningLogElement = document.getElementById("warning-log");
+      const zoomInBtn = document.getElementById("zoom-in-btn");
+      const zoomOutBtn = document.getElementById("zoom-out-btn");
+      const zoomControls = document.getElementById("zoom-controls");
 
       let currentObjectUrl = null;
+      let svgZoom = 1;
+
+      // Ensure zoom controls are hidden on page load
+      if (zoomControls) {
+        zoomControls.classList.add("hidden");
+      }
+
+      function updateSvgZoom() {
+        const svg = svgContainer.querySelector("svg");
+        if (svg) {
+          svg.style.transformOrigin = "center center";
+          svg.style.transform = `scale(${svgZoom})`;
+        }
+      }
+
+      if (zoomInBtn && zoomOutBtn) {
+        zoomInBtn.addEventListener("click", () => {
+          svgZoom *= 1.2;
+          updateSvgZoom();
+        });
+        zoomOutBtn.addEventListener("click", () => {
+          svgZoom /= 1.2;
+          updateSvgZoom();
+        });
+      }
+
+      function showZoomControls(show) {
+        if (zoomControls) {
+          if (show) {
+            zoomControls.classList.remove("hidden");
+          } else {
+            zoomControls.classList.add("hidden");
+          }
+        }
+      }
 
       fileInput.addEventListener("change", async (event) => {
         const file = event.target.files[0];
@@ -146,6 +192,7 @@
         errorLogElement.textContent = "";
         warningLogElement.classList.add("hidden");
         warningLogElement.innerHTML = "";
+        showZoomControls(false);
 
         if (currentObjectUrl) {
           URL.revokeObjectURL(currentObjectUrl);
@@ -155,6 +202,7 @@
         if (!file) {
           svgContainer.innerHTML =
             "<p>No file selected. Please choose a .lbrn2 file.</p>";
+          showZoomControls(false);
           return;
         }
 
@@ -164,6 +212,7 @@
           errorLogElement.classList.remove("hidden");
           svgContainer.innerHTML =
             "<p>Invalid file type. Please select a .lbrn2 file.</p>";
+          showZoomControls(false);
           return;
         }
 
@@ -193,6 +242,9 @@
             }
 
             svgContainer.innerHTML = svgString;
+            svgZoom = 1;
+            updateSvgZoom();
+            showZoomControls(true);
 
             const blob = new Blob([svgString], {
               type: "image/svg+xml;charset=utf-8",
@@ -208,6 +260,7 @@
             svgContainer.innerHTML = `<p>${errorMessage}</p>`;
             errorLogElement.textContent = errorMessage;
             errorLogElement.classList.remove("hidden");
+            showZoomControls(false);
           }
         };
 
@@ -216,6 +269,7 @@
           svgContainer.innerHTML = `<p>${readErrorMessage}</p>`;
           errorLogElement.textContent = readErrorMessage;
           errorLogElement.classList.remove("hidden");
+          showZoomControls(false);
         };
 
         reader.readAsText(file);
