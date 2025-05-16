@@ -1,9 +1,18 @@
 import { XMLParser, XMLValidator } from "fast-xml-parser";
-import type { LightBurnProjectFile, Lbrn2XForm, Lbrn2Vec2 } from "./lbrn2Types";
+import type {
+  LightBurnProjectFile,
+  Lbrn2XForm,
+  Lbrn2Vec2,
+  PathPrimitiveIR,
+  Lbrn2Path,
+} from "./lbrn2Types";
 
 const alwaysArrayPaths = [
   "LightBurnProject.Shape",
   "LightBurnProject.CutSetting",
+  // For groups, Children can sometimes be a single Shape object not in an array if only one child.
+  // This is handled by checking type inside parseShapeRecursive.
+  // "LightBurnProject.Shape.Children.Shape" // if Children is an object with a Shape key
 ];
 
 const parser = new XMLParser({
@@ -17,7 +26,11 @@ const parser = new XMLParser({
     isLeafNode: boolean,
     isAttribute: boolean
   ): boolean => {
-    return alwaysArrayPaths.includes(jpath);
+    if (alwaysArrayPaths.includes(jpath)) return true;
+    // Handle cases like <Children><Shape>...</Shape><Shape>...</Shape></Children>
+    if (jpath === "LightBurnProject.Shape.Children.Shape") return true;
+    if (jpath === "LightBurnProject.Shape.BackupPath.Shape") return true; // Though BackupPath usually has one
+    return false;
   },
   tagValueProcessor: (
     tagName: string,
@@ -27,9 +40,9 @@ const parser = new XMLParser({
     isLeafNode: boolean
   ): unknown => {
     if (
-      jPath === "LightBurnProject.Shape.XForm" ||
-      jPath === "LightBurnProject.Shape.VertList" ||
-      jPath === "LightBurnProject.Shape.PrimList"
+      jPath.endsWith(".XForm") || // Covers LightBurnProject.Shape.XForm and LightBurnProject.Shape.BackupPath.XForm etc.
+      jPath.endsWith(".VertList") ||
+      jPath.endsWith(".PrimList")
     ) {
       return String(tagValue);
     }
@@ -43,9 +56,10 @@ function parseXFormString(xformStr: string): Lbrn2XForm {
     parts.length !== 6 ||
     parts.some((n) => typeof n !== "number" || isNaN(n))
   ) {
-    throw new Error(`Invalid XForm string: ${xformStr}`);
+    // Do not throw, but log and return identity if critical, or handle upstream
+    console.error(`Invalid XForm string, using identity: ${xformStr}`);
+    return { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 };
   }
-  // Type assertion is safe due to above check
   return {
     a: parts[0]!,
     b: parts[1]!,
@@ -63,7 +77,6 @@ function parseControlPointData(
   if (!cpString || !cpString.startsWith("c")) {
     return data;
   }
-  // Explicit parser: scan for c0x/c0y/c1x/c1y followed by a number
   let i = 0;
   while (i < cpString.length) {
     if (
@@ -74,7 +87,6 @@ function parseControlPointData(
     ) {
       const key = cpString.slice(i, i + 3) as "c0x" | "c0y" | "c1x" | "c1y";
       i += 3;
-      // Parse number (may include sign, decimal, exponent)
       let numStr = "";
       while (i < cpString.length) {
         const ch = cpString[i];
@@ -107,8 +119,6 @@ function parseControlPointData(
   return data;
 }
 
-// Parse PrimList string into IR array of primitives
-import type { PathPrimitiveIR } from "./lbrn2Types";
 function parsePrimListToIR(primListStr: string): PathPrimitiveIR[] {
   const primitives: PathPrimitiveIR[] = [];
   let i = 0;
@@ -165,7 +175,6 @@ function parsePrimListToIR(primListStr: string): PathPrimitiveIR[] {
         endIdx: args[1] as number,
       });
     }
-    // Extend for Q, C, etc. as needed
   }
   return primitives;
 }
@@ -174,7 +183,6 @@ function parseVertListString(vertListStr: string): Lbrn2Vec2[] {
   let i = 0;
   const len = vertListStr.length;
   while (i < len) {
-    // Skip whitespace
     while (i < len) {
       const ch = vertListStr[i];
       if (ch !== undefined && /\s/.test(ch)) {
@@ -185,7 +193,6 @@ function parseVertListString(vertListStr: string): Lbrn2Vec2[] {
     }
     if (i < len && vertListStr[i] === "V") {
       i++;
-      // Skip whitespace
       while (i < len) {
         const ch = vertListStr[i];
         if (ch !== undefined && /\s/.test(ch)) {
@@ -194,7 +201,6 @@ function parseVertListString(vertListStr: string): Lbrn2Vec2[] {
           break;
         }
       }
-      // Parse x
       let xStr = "";
       while (i < len) {
         const ch = vertListStr[i];
@@ -216,7 +222,6 @@ function parseVertListString(vertListStr: string): Lbrn2Vec2[] {
           break;
         }
       }
-      // Skip whitespace
       while (i < len) {
         const ch = vertListStr[i];
         if (ch !== undefined && /\s/.test(ch)) {
@@ -225,7 +230,6 @@ function parseVertListString(vertListStr: string): Lbrn2Vec2[] {
           break;
         }
       }
-      // Parse y
       let yStr = "";
       while (i < len) {
         const ch = vertListStr[i];
@@ -247,7 +251,6 @@ function parseVertListString(vertListStr: string): Lbrn2Vec2[] {
           break;
         }
       }
-      // Parse control point string (until next 'V' or end)
       let cpStr = "";
       while (i < len && vertListStr[i] !== "V") {
         const ch = vertListStr[i];
@@ -257,13 +260,14 @@ function parseVertListString(vertListStr: string): Lbrn2Vec2[] {
         i++;
       }
       const controlPoints = parseControlPointData(cpStr.trim());
-      vertices.push({
-        x: parseFloat(xStr),
-        y: parseFloat(yStr),
-        ...controlPoints,
-      });
+      const x = parseFloat(xStr);
+      const y = parseFloat(yStr);
+      if (!isNaN(x) && !isNaN(y)) {
+        vertices.push({ x, y, ...controlPoints });
+      } else {
+        console.warn(`Failed to parse vertex from X: "${xStr}", Y: "${yStr}" in VertList: "${vertListStr}"`);
+      }
     } else {
-      // Skip unknown/invalid chars
       i++;
     }
   }
@@ -276,15 +280,13 @@ export function parseLbrn2(xmlString: string): LightBurnProjectFile {
   }
   const parsed = parser.parse(xmlString) as LightBurnProjectFile;
 
-  // Cache for path definitions (VertList, PrimList, and their parsed counterparts)
-  const pathDefinitionCache = new Map<
+  const vertexDataCache = new Map<
     string,
-    {
-      VertList: string;
-      PrimList: string;
-      parsedVerts?: Lbrn2Vec2[];
-      parsedPrimitives?: PathPrimitiveIR[];
-    }
+    { VertList: string; parsedVerts: Lbrn2Vec2[] }
+  >();
+  const primitiveDataCache = new Map<
+    string,
+    { PrimList: string; parsedPrimitives: PathPrimitiveIR[] }
   >();
 
   if (parsed.LightBurnProject) {
@@ -296,7 +298,6 @@ export function parseLbrn2(xmlString: string): LightBurnProjectFile {
       }
       parsed.LightBurnProject.CutSetting.forEach((cs) => {
         if (!cs) return;
-        // Flatten all properties with a single 'Value' key
         for (const key in cs) {
           if (Object.prototype.hasOwnProperty.call(cs, key)) {
             const val = (cs as any)[key];
@@ -321,166 +322,145 @@ export function parseLbrn2(xmlString: string): LightBurnProjectFile {
         parsed.LightBurnProject.Shape = [parsed.LightBurnProject.Shape];
       }
 
-      // Define parseShapeRecursive to accept the cache
-      const parseShapeRecursive = (
-        shape: any,
-        cache: typeof pathDefinitionCache
-      ): any => {
-        // Handle Text with BackupPath: substitute Text shape with Path from BackupPath
+      const parseShapeRecursive = (shape: any): any => {
         if (
           shape.Type === "Text" &&
           shape.HasBackupPath === 1 &&
           shape.BackupPath &&
-          typeof shape.BackupPath === "object" &&
-          shape.BackupPath.Type === "Path" &&
-          typeof shape.BackupPath.XForm === "string" &&
-          typeof shape.BackupPath.VertList === "string" &&
-          typeof shape.BackupPath.PrimList === "string"
+          typeof shape.BackupPath === "object"
         ) {
-          // Create a new Path shape from BackupPath data
-          const backupData = shape.BackupPath;
-          shape = {
-            Type: "Path",
-            CutIndex:
-              backupData.CutIndex !== undefined
-                ? backupData.CutIndex
-                : shape.CutIndex,
-            XFormVal: backupData.XForm,
-            XForm: parseXFormString(backupData.XForm),
-            VertList: backupData.VertList,
-            PrimList: backupData.PrimList,
-          };
-        }
-
-        // Handle Path definition and reuse
-        if (shape.Type === "Path") {
-          // VertID and PrimID should be parsed as numbers by fast-xml-parser due to parseAttributeValue: true
-          // If they are strings, ensure conversion:
-          if (shape.VertID !== undefined && typeof shape.VertID === "string") {
-            shape.VertID = parseInt(String(shape.VertID), 10);
-          }
-          if (shape.PrimID !== undefined && typeof shape.PrimID === "string") {
-            shape.PrimID = parseInt(String(shape.PrimID), 10);
-          }
-
-          const cacheKey =
-            shape.VertID !== undefined && shape.PrimID !== undefined
-              ? `${shape.VertID}_${shape.PrimID}`
-              : null;
-
-          if (
-            shape.VertList &&
-            typeof shape.VertList === "string" &&
-            shape.PrimList &&
-            typeof shape.PrimList === "string"
-          ) {
-            // This shape defines the path geometry
-            shape.parsedVerts = parseVertListString(shape.VertList);
-            if (shape.PrimList === "LineClosed") {
-              shape.parsedPrimitives = [];
-            } else {
-              shape.parsedPrimitives = parsePrimListToIR(shape.PrimList);
+            // BackupPath might be an object with a 'Shape' key if it's a single shape, or directly the shape.
+            const backupShapeData = shape.BackupPath.Shape || shape.BackupPath;
+            if (backupShapeData.Type === "Path") {
+                const XFormVal = backupShapeData.XFormVal || backupShapeData.XForm; // XForm might be string or pre-parsed obj by this point
+                shape = {
+                    Type: "Path",
+                    CutIndex: backupShapeData.CutIndex !== undefined ? backupShapeData.CutIndex : shape.CutIndex,
+                    XFormVal: typeof XFormVal === 'string' ? XFormVal : undefined, // Store original string if available
+                    XForm: typeof XFormVal === 'string' ? parseXFormString(XFormVal) : XFormVal, // Parse if string, else use as is
+                    VertList: backupShapeData.VertList,
+                    PrimList: backupShapeData.PrimList,
+                    // Ensure VertID/PrimID from BackupPath are also carried if they exist
+                    VertID: backupShapeData.VertID,
+                    PrimID: backupShapeData.PrimID,
+                };
             }
+        }
+        
 
-            if (cacheKey) {
-              cache.set(cacheKey, {
-                VertList: shape.VertList,
-                PrimList: shape.PrimList,
-                parsedVerts: shape.parsedVerts,
-                parsedPrimitives: shape.parsedPrimitives,
+        if (shape.Type === "Path") {
+          const pathShape = shape as Lbrn2Path;
+          if (pathShape.VertID !== undefined) pathShape.VertID = Number(pathShape.VertID);
+          if (pathShape.PrimID !== undefined) pathShape.PrimID = Number(pathShape.PrimID);
+
+          let resolvedVerts: Lbrn2Vec2[] = [];
+          let resolvedVertListStr: string = "";
+          let resolvedPrims: PathPrimitiveIR[] = [];
+          let resolvedPrimListStr: string = "";
+
+          if (pathShape.VertList && typeof pathShape.VertList === "string") {
+            resolvedVertListStr = pathShape.VertList;
+            resolvedVerts = parseVertListString(resolvedVertListStr);
+            if (pathShape.VertID !== undefined) {
+              vertexDataCache.set(String(pathShape.VertID), {
+                VertList: resolvedVertListStr,
+                parsedVerts: resolvedVerts,
               });
             }
-          } else if (cacheKey) {
-            // This shape reuses a definition
-            const cachedDef = cache.get(cacheKey);
-            if (cachedDef) {
-              shape.VertList = cachedDef.VertList;
-              shape.PrimList = cachedDef.PrimList;
-              shape.parsedVerts = cachedDef.parsedVerts;
-              shape.parsedPrimitives = cachedDef.parsedPrimitives;
+          } else if (pathShape.VertID !== undefined) {
+            const cachedVertData = vertexDataCache.get(String(pathShape.VertID));
+            if (cachedVertData) {
+              resolvedVertListStr = cachedVertData.VertList;
+              resolvedVerts = cachedVertData.parsedVerts;
             } else {
-              console.warn(
-                `Path definition for VertID=${shape.VertID}, PrimID=${
-                  shape.PrimID
-                } not found in cache. Shape will be empty or invalid: ${JSON.stringify(
-                  shape
-                )}`
-              );
-              shape.parsedVerts = [];
-              shape.parsedPrimitives = [];
+              console.warn(`Vertex data for VertID=${pathShape.VertID} not found in cache. Path may be empty or invalid.`);
             }
-          } else {
-            // Path shape without VertList/PrimList AND without a valid cacheKey for reuse.
-            if (!shape.VertList && !shape.PrimList) {
-              console.warn(
-                `Path shape is missing VertList/PrimList and VertID/PrimID for reuse. Treating as empty: ${JSON.stringify(
-                  shape
-                )}`
-              );
-              shape.parsedVerts = [];
-              shape.parsedPrimitives = [];
+          }
+
+          if (pathShape.PrimList && typeof pathShape.PrimList === "string") {
+            resolvedPrimListStr = pathShape.PrimList;
+            if (resolvedPrimListStr === "LineClosed") {
+              resolvedPrims = []; 
+            } else {
+              resolvedPrims = parsePrimListToIR(resolvedPrimListStr);
             }
+            if (pathShape.PrimID !== undefined) {
+              primitiveDataCache.set(String(pathShape.PrimID), {
+                PrimList: resolvedPrimListStr,
+                parsedPrimitives: resolvedPrims,
+              });
+            }
+          } else if (pathShape.PrimID !== undefined) {
+            const cachedPrimData = primitiveDataCache.get(String(pathShape.PrimID));
+            if (cachedPrimData) {
+              resolvedPrimListStr = cachedPrimData.PrimList;
+              resolvedPrims = cachedPrimData.parsedPrimitives;
+            } else {
+              console.warn(`Primitive data for PrimID=${pathShape.PrimID} not found in cache. Path may be empty or invalid.`);
+            }
+          }
+          
+          pathShape.parsedVerts = resolvedVerts;
+          pathShape.VertList = resolvedVertListStr; 
+          pathShape.parsedPrimitives = resolvedPrims;
+          pathShape.PrimList = resolvedPrimListStr;
+
+          if (pathShape.parsedVerts.length === 0 && pathShape.PrimList !== "LineClosed") {
+             // console.warn(`Path shape resulted in no vertices and is not LineClosed, might be skipped: ${JSON.stringify(pathShape)}`);
+             // This path is likely invalid if it's not LineClosed and has no verts.
+             // The filter(Boolean) later will remove it if it's nullified.
           }
         }
 
-        // Parse XForm for current shape (after potential geometry population from cache/BackupPath)
-        if (shape.XFormVal) {
+        if (shape.XFormVal && typeof shape.XFormVal === 'string') {
           shape.XForm = parseXFormString(shape.XFormVal);
-        } else if (shape.XForm && typeof shape.XForm === "string") {
+        } else if (shape.XForm && typeof shape.XForm === 'string') {
+           //This case can happen if XFormVal was missing but XForm (as string) was present, e.g. from BackupPath
           shape.XForm = parseXFormString(shape.XForm as unknown as string);
         }
 
+
         if (shape.Type === "Group" && shape.Children) {
-          // Children can be a single shape, array, or { Shape: ... }
           let childrenArr: any[] = [];
           if (Array.isArray(shape.Children)) {
             childrenArr = shape.Children;
-          } else if (shape.Children.Shape !== undefined) {
-            if (Array.isArray(shape.Children.Shape)) {
-              childrenArr = shape.Children.Shape;
-            } else {
-              childrenArr = [shape.Children.Shape];
-            }
-          } else if (shape.Children) {
-            childrenArr = [shape.Children];
+          } else if (shape.Children.Shape !== undefined) { // Handles <Children><Shape>...</Shape></Children>
+            childrenArr = Array.isArray(shape.Children.Shape) ? shape.Children.Shape : [shape.Children.Shape];
+          } else if (typeof shape.Children === 'object' && shape.Children !== null) { // Handles single child not wrapped in Shape key
+             childrenArr = [shape.Children];
           }
           shape.Children = childrenArr
-            .map((child) => parseShapeRecursive(child, cache))
-            .filter(Boolean); // Pass cache
+            .map((child) => parseShapeRecursive(child))
+            .filter(Boolean);
+        }
+        
+        if (shape.Type === "Path" && (!shape.parsedVerts || shape.parsedVerts.length === 0)) {
+           // A path without vertices is unrenderable.
+           // Special case: LineClosed might imply a point if one vertex, M X,Y Z.
+           // parsePathPrimitives handles LineClosed with 0 vertices by returning "".
+           // So, if parsedVerts is empty, it's generally not drawable.
+           console.warn(`Path shape has no vertices after resolution, skipping: ${JSON.stringify(shape)}`);
+           return null;
         }
 
-        // Ensure all non-Text shapes that are not Groups being emptied have a parsed XForm
-        // or are otherwise valid.
         if (shape.Type !== "Text" && !shape.XForm) {
-          // A Group might legitimately not have an XForm if it's an identity transform at the root,
-          // but its children will. For other shapes, XForm is essential.
-          // If a Path lost its geometry and has no XForm, it's definitely skippable.
-          if (
-            shape.Type === "Path" &&
-            (!shape.parsedVerts || shape.parsedVerts.length === 0)
-          ) {
-            return null; // Skip paths that ended up with no geometry
-          }
-          if (shape.Type !== "Group") {
-            // Groups might be containers
+          if (shape.Type !== "Group" || (shape.Type === "Group" && (!shape.Children || shape.Children.length === 0))) {
             console.warn(
               `Shape type ${
                 shape.Type
-              } is missing XForm, may not render correctly or be skipped: ${JSON.stringify(
+              } is missing XForm and is not a non-empty Group, skipping: ${JSON.stringify(
                 shape
               )}`
             );
-            // Returning null for non-Group, non-Text shapes without XForm:
             return null;
           }
         }
-
         return shape;
       };
 
       parsed.LightBurnProject.Shape = parsed.LightBurnProject.Shape.map(
-        (shape) => parseShapeRecursive(shape, pathDefinitionCache)
-      ).filter(Boolean); // Remove null shapes
+        (s) => parseShapeRecursive(s)
+      ).filter(Boolean);
     } else {
       parsed.LightBurnProject.Shape = [];
     }

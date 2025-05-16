@@ -1,6 +1,6 @@
 {
   "name": "lbrn2-to-svg",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "A library and CLI to parse LightBurn LBRN2 files and convert them to SVG.",
   "type": "module",
   "exports": {
@@ -19,7 +19,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "bun build ./src/index.ts --outdir ./dist --target browser --format esm --sourcemap && tsc --emitDeclarationOnly --declaration --outDir dist ./src/index.ts",
+    "build": "bun build ./src/index.ts --outdir ./dist --target browser --format esm && tsc --emitDeclarationOnly --declaration --outDir dist ./src/index.ts",
     "prepublishOnly": "bun run build",
     "minimize-artifacts": "bun run scripts/minimize_lbrn2_artifacts.ts"
   },
