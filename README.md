@@ -3,39 +3,48 @@
 [![NPM Version](https://img.shields.io/npm/v/lbrn2-to-svg.svg?style=flat)](https://www.npmjs.com/package/lbrn2-to-svg)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A TypeScript library and command-line interface (CLI) to parse LightBurn LBRN2 project files and convert their 2D vector shapes to Scalable Vector Graphics (SVG) format.
+A TypeScript library and command-line interface (CLI) to parse LightBurn LBRN2 project files and convert their 2D vector shapes, images, and text outlines to Scalable Vector Graphics (SVG) format.
 
 This project aims to provide a robust tool for developers needing to work with LBRN2 files programmatically or convert them for use in other applications. It is designed to be compatible with various JavaScript/TypeScript environments, including Node.js, Deno, Bun, and modern web browsers (for the library functionality).
 
 ## Features
 
 *   **LBRN2 Parsing:** Parses LBRN2 XML structure into a typed JavaScript object.
-*   **SVG Conversion:** Converts supported LBRN2 shapes to their SVG equivalents.
-    *   Supported Shapes: `Rect`, `Ellipse`, `Path` (including Lines and Bezier curves), `Group`.
-    *   Handles shape transformations (`<XForm>`).
-*   **Styling:** Applies basic styling (stroke color) from LBRN2 `<CutSetting>` elements.
+*   **SVG Conversion:** Converts supported LBRN2 elements to their SVG equivalents.
+    *   Supported Elements: `Rect`, `Ellipse`, `Path` (including Lines and Bezier curves), `Group`, **`Bitmap`**, **`Text` (via BackupPath)**.
+    *   Handles element transformations (`<XForm>`).
+*   **Styling:** Applies basic styling (stroke color) from LBRN2 `<CutSetting>` elements for vector shapes.
 *   **CLI Tool:** Provides a command-line interface for easy file conversion.
 *   **TypeScript Library:** Offers an ESM library for programmatic integration into your projects.
 *   **Cross-Environment:** The core library is designed to be environment-agnostic. The CLI is for server-side environments (Node, Deno, Bun).
 
 ## Supported LBRN2 Features
 
-*   **Shapes:**
+*   **Shapes/Elements:**
     *   `<Shape Type="Rect">` (including corner radius `Cr`)
     *   `<Shape Type="Ellipse">` (converts to `<circle>` if `Rx` equals `Ry`)
     *   `<Shape Type="Path">`
         *   `<VertList>` (vertex coordinates and control points `c0x, c0y, c1x, c1y`)
         *   `<PrimList>` (primitives: `L` for Line, `B` for Bezier)
     *   `<Shape Type="Group">` (with nested shapes and transform composition)
+    *   **`<Shape Type="Bitmap">`**
+        *   Reads `W` (width), `H` (height), and `Data` (Base64 encoded image data).
+        *   Converted to an SVG `<image>` element with `xlink:href` set to the data URL.
+        *   Other bitmap properties (`Gamma`, `Contrast`, etc.) are parsed but not used in the SVG output.
+    *   **`<Shape Type="Text">`**
+        *   If the `Text` shape has `HasBackupPath="1"` and contains a `<BackupPath>` child of `Type="Path"`, the **parser automatically replaces the `Text` shape with this `Path` shape**.
+        *   This allows conversion of the text outline as vector paths, avoiding complex font and rendering issues in SVG.
+        *   `Text` shapes without a usable `BackupPath` are currently skipped/ignored for rendering.
+
 *   **Transformations:** `<XForm>` matrix for each shape and group.
-*   **Cut Settings:** Uses `CutIndex` to link shapes to `<CutSetting>` for stroke color. Default colors are used if a color is not explicitly defined in the `CutSetting`.
+*   **Cut Settings:** Uses `CutIndex` to link vector shapes (`Rect`, `Ellipse`, `Path`, `Group`) to `<CutSetting>` for stroke color. Default colors are used if a color is not explicitly defined in the `CutSetting`. *Note: Style settings are not applied to `<image>` elements converted from `Bitmap` shapes.*
 *   **Coordinate System:** Correctly handles LightBurn's Y-up coordinate system and transforms it to SVG's Y-down system within the calculated `viewBox`.
 
 ## Limitations & TODO
 
-*   Currently does not support raster images (`<Image>`), text elements (`<Text>`), or advanced LBRN2 features like variable text.
+*   Direct conversion of `Text` elements to SVG `<text>` elements (which would involve font handling, layout, etc.) is **not** supported. Text is only rendered if a vector `BackupPath` is available.
 *   Only basic styling (stroke color, default stroke width) is applied from `CutSetting`. Other laser parameters are ignored.
-*   More complex `PrimList` primitives (if any beyond Line and Bezier) are not supported.
+*   More complex `PrimList` primitives (if any beyond Line and Bezier) are not fully tested or supported.
 *   Error handling for malformed LBRN2 files can be improved.
 
 ## Installation
