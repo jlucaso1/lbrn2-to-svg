@@ -1,48 +1,6 @@
 import type { Lbrn2Path } from "./lbrn2Types";
 
-type PrimToken = { type: string; args: number[] };
-
 const F = (n: number) => n.toFixed(6);
-
-export function tokenizePrimList(primList: string): PrimToken[] {
-  const tokens: PrimToken[] = [];
-  let i = 0;
-  const len = primList.length;
-
-  function parseNextInt(): number | null {
-    while (i < len && /\s/.test(primList[i] ?? "")) i++;
-    let numStr = "";
-    while (i < len && /[0-9]/.test(primList[i] ?? "")) {
-      numStr += primList[i];
-      i++;
-    }
-    return numStr.length > 0 ? Number(numStr) : null;
-  }
-
-  while (i < len) {
-    while (i < len && /\s/.test(primList[i] ?? "")) i++;
-    if (i >= len) break;
-    const type = primList[i];
-    if (type === undefined || !/[A-Za-z]/.test(type)) {
-      i++;
-      continue;
-    }
-    i++;
-    const args: number[] = [];
-    for (let argCount = 0; argCount < 4; argCount++) {
-      const num = parseNextInt();
-      if (num !== null) {
-        args.push(num);
-      } else {
-        break;
-      }
-    }
-    if (type !== undefined) {
-      tokens.push({ type, args });
-    }
-  }
-  return tokens;
-}
 
 export function parsePathPrimitives(path: Lbrn2Path, log: string[]): string {
   // Handle LineClosed explicitly

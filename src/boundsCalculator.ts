@@ -1,11 +1,4 @@
-import type {
-  Lbrn2Shape,
-  Lbrn2Rect,
-  Lbrn2Ellipse,
-  Lbrn2Path,
-  Lbrn2XForm,
-  Lbrn2Bitmap,
-} from "./lbrn2Types";
+import type { Lbrn2Shape, Lbrn2XForm } from "./lbrn2Types";
 
 // Compose two transforms
 export function composeXForms(g: Lbrn2XForm, c: Lbrn2XForm): Lbrn2XForm {
@@ -99,108 +92,72 @@ export function getTransformedBounds(
     const path = shape;
     if (!path.parsedVerts || !path.PrimList) return null;
 
-    // Inline tokenizePrimList logic (to avoid circular dep)
-    const tokens: { type: string; args: number[] }[] = [];
-    let i = 0;
-    const primList = path.PrimList;
-    const len = primList.length;
-    const parseNextInt = (): number | null => {
-      while (i < len && /\s/.test(primList[i] ?? "")) i++;
-      let numStr = "";
-      while (i < len && /[0-9]/.test(primList[i] ?? "")) {
-        numStr += primList[i];
-        i++;
+    // Use parsedVerts and parsedPrimitives from lbrn2Parser.ts
+    // Handle "LineClosed" explicitly as it won't have parsedPrimitives
+    if (path.PrimList === "LineClosed") {
+      if (path.parsedVerts.length > 0) {
+        pointsToBound.push(
+          ...path.parsedVerts.filter((v) => v !== null && v !== undefined)
+        );
       }
-      return numStr.length > 0 ? Number(numStr) : null;
-    };
-    while (i < len) {
-      while (i < len && /\s/.test(primList[i] ?? "")) i++;
-      if (i >= len) break;
-      const type = primList[i];
-      if (type === undefined || !/[A-Za-z]/.test(type)) {
-        i++;
-        continue;
-      }
-      i++;
-      const args: number[] = [];
-      for (let argCount = 0; argCount < 4; argCount++) {
-        const num = parseNextInt();
-        if (num !== null) {
-          args.push(num);
-        } else {
-          break;
-        }
-      }
-      if (type !== undefined) {
-        tokens.push({ type, args });
-      }
-    }
+    } else if (path.parsedPrimitives && path.parsedPrimitives.length > 0) {
+      for (const prim of path.parsedPrimitives) {
+        if (prim.type === "Line") {
+          const p0 = path.parsedVerts[prim.startIdx];
+          const p1 = path.parsedVerts[prim.endIdx];
+          if (p0) pointsToBound.push(p0);
+          if (p1) pointsToBound.push(p1);
+        } else if (prim.type === "Bezier") {
+          const p0 = path.parsedVerts[prim.startIdx];
+          const p1 = path.parsedVerts[prim.endIdx];
 
-    for (const token of tokens) {
-      const primType = token.type;
-      const args = token.args;
-
-      if (primType === "L") {
-        if (args.length === 2) {
-          const idx0 = args[0];
-          const idx1 = args[1];
-          if (typeof idx0 === "number" && typeof idx1 === "number") {
-            const p0 = path.parsedVerts[idx0];
-            const p1 = path.parsedVerts[idx1];
-            if (p0) pointsToBound.push(p0);
-            if (p1) pointsToBound.push(p1);
-          }
-        }
-      } else if (primType === "B") {
-        if (args.length === 2) {
-          const idx0 = args[0];
-          const idx1 = args[1];
-          if (typeof idx0 === "number" && typeof idx1 === "number") {
-            const p0 = path.parsedVerts[idx0];
-            const p1 = path.parsedVerts[idx1];
-            if (p0) {
-              pointsToBound.push(p0);
-              if (p0.c0x !== undefined && p0.c0y !== undefined)
-                pointsToBound.push({ x: p0.c0x, y: p0.c0y });
+          if (p0) {
+            pointsToBound.push(p0);
+            if (p0.c0x !== undefined && p0.c0y !== undefined) {
+              pointsToBound.push({ x: p0.c0x, y: p0.c0y });
             }
-            if (p1) {
-              pointsToBound.push(p1);
-              if (p1.c1x !== undefined && p1.c1y !== undefined)
-                pointsToBound.push({ x: p1.c1x, y: p1.c1y });
-              // Sample Bezier extrema
-              if (
-                p0 &&
-                p1 &&
-                p0.c0x !== undefined &&
-                p0.c0y !== undefined &&
-                p1.c1x !== undefined &&
-                p1.c1y !== undefined
-              ) {
-                const c0 = { x: p0.c0x, y: p0.c0y };
-                const c1 = { x: p1.c1x, y: p1.c1y };
-                const ts = bezierExtrema(p0, c0, c1, p1);
-                for (const t of ts) {
-                  const mt = 1 - t;
-                  const x =
-                    mt * mt * mt * p0.x +
-                    3 * mt * mt * t * c0.x +
-                    3 * mt * t * t * c1.x +
-                    t * t * t * p1.x;
-                  const y =
-                    mt * mt * mt * p0.y +
-                    3 * mt * mt * t * c0.y +
-                    3 * mt * t * t * c1.y +
-                    t * t * t * p1.y;
-                  pointsToBound.push({ x, y });
-                }
-              }
+          }
+          if (p1) {
+            pointsToBound.push(p1);
+            if (p1.c1x !== undefined && p1.c1y !== undefined) {
+              pointsToBound.push({ x: p1.c1x, y: p1.c1y });
+            }
+          }
+
+          // Sample Bezier extrema if all points are valid
+          if (
+            p0 &&
+            p1 &&
+            p0.c0x !== undefined &&
+            p0.c0y !== undefined &&
+            p1.c1x !== undefined &&
+            p1.c1y !== undefined
+          ) {
+            const c0 = { x: p0.c0x, y: p0.c0y };
+            const c1 = { x: p1.c1x, y: p1.c1y };
+            const ts = bezierExtrema(p0, c0, c1, p1);
+            for (const t of ts) {
+              const mt = 1 - t;
+              const x =
+                mt * mt * mt * p0.x +
+                3 * mt * mt * t * c0.x +
+                3 * mt * t * t * c1.x +
+                t * t * t * p1.x;
+              const y =
+                mt * mt * mt * p0.y +
+                3 * mt * mt * t * c0.y +
+                3 * mt * t * t * c1.y +
+                t * t * t * p1.y;
+              pointsToBound.push({ x, y });
             }
           }
         }
       }
-    }
-    if (pointsToBound.length === 0 && path.parsedVerts.length > 0) {
-      pointsToBound.push(...path.parsedVerts);
+    } else if (path.parsedVerts.length > 0) {
+      // Fallback: if no primitives but vertices exist (e.g. a list of points not forming lines/curves)
+      pointsToBound.push(
+        ...path.parsedVerts.filter((v) => v !== null && v !== undefined)
+      );
     }
   } else if (shape.Type === "Bitmap") {
     const bitmap = shape;
