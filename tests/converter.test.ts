@@ -72,7 +72,7 @@ function structurallyEqualSvg(svgA: string, svgB: string): boolean {
       }
       // Normalize path d attribute: remove unnecessary zeros and spaces
       if (key === "d") {
-        let dStr = val as string;
+        let dStr = val;
         // Normalize numbers within d string to 5 decimal places, remove trailing zeros and unnecessary decimals
         dStr = dStr.replace(/-?\d*\.?\d+([eE][-+]?\d+)?/g, (numStr) => {
           const num = parseFloat(numStr);
@@ -134,6 +134,7 @@ describe("LBRN2 to SVG Converter", () => {
     "group_empty",
     "group_single_child",
     "word",
+    "image",
   ];
 
   for (const tc of testCases) {

@@ -1,9 +1,6 @@
 import type {
   LightBurnProjectFile,
   Lbrn2Shape,
-  Lbrn2Rect,
-  Lbrn2Ellipse,
-  Lbrn2Path,
   Lbrn2XForm,
   Lbrn2CutSetting,
 } from "./lbrn2Types";
@@ -33,7 +30,7 @@ function shapeToSvgElement(
 
   switch (shape.Type) {
     case "Rect": {
-      const rect = shape as Lbrn2Rect;
+      const rect = shape;
       let el = `<rect x="${F(-rect.W / 2)}" y="${F(-rect.H / 2)}" width="${F(
         rect.W
       )}" height="${F(rect.H)}"`;
@@ -43,8 +40,21 @@ function shapeToSvgElement(
       el += ` style="${style}" transform="${transform}"/>`;
       return el;
     }
+    case "Bitmap": {
+      const bitmap = shape;
+      if (!bitmap.Data) {
+        log.push(`Bitmap shape missing Data: ${JSON.stringify(shape)}`);
+        return "";
+      }
+      const href = `data:image/png;base64,${bitmap.Data}`;
+      return `<image x="${F(-bitmap.W / 2)}" y="${F(-bitmap.H / 2)}" width="${F(
+        bitmap.W
+      )}" height="${F(
+        bitmap.H
+      )}" xlink:href="${href}" transform="${transform}"/>`;
+    }
     case "Ellipse": {
-      const ellipse = shape as Lbrn2Ellipse;
+      const ellipse = shape;
       if (ellipse.Rx === ellipse.Ry) {
         return `<circle cx="0" cy="0" r="${F(
           ellipse.Rx
@@ -56,7 +66,7 @@ function shapeToSvgElement(
       }
     }
     case "Path": {
-      const path = shape as Lbrn2Path;
+      const path = shape;
       if (!path.parsedVerts || path.parsedVerts.length === 0) {
         log.push(`Path shape with no vertices: ${JSON.stringify(shape)}`);
         return "";
@@ -70,7 +80,7 @@ function shapeToSvgElement(
     }
     case "Group": {
       if (shape.Type === "Group") {
-        const group = shape as import("./lbrn2Types").Lbrn2Group;
+        const group = shape;
         if (!group.Children || !Array.isArray(group.Children)) {
           log.push(`Group shape with no children: ${JSON.stringify(shape)}`);
           return "";
@@ -112,8 +122,8 @@ function shapeToSvgElement(
 export function lbrn2ToSvg(project: LightBurnProjectFile): string {
   let shapes = project.LightBurnProject.Shape || [];
   if (!Array.isArray(shapes)) {
-    if (shapes && (shapes as Lbrn2Shape).Type) {
-      shapes = [shapes as Lbrn2Shape];
+    if (shapes && shapes.Type) {
+      shapes = [shapes];
     } else {
       return `<svg xmlns="http://www.w3.org/2000/svg" width="100mm" height="100mm" viewBox="0 0 100 100"><text>No shapes found</text></svg>`;
     }
@@ -129,7 +139,7 @@ export function lbrn2ToSvg(project: LightBurnProjectFile): string {
     : [];
 
   const log: string[] = [];
-  const svgElements = (shapes as Lbrn2Shape[])
+  const svgElements = shapes
     .map((s) => shapeToSvgElement(s, cutSettings, log))
     .join("\n    ");
 
@@ -138,7 +148,7 @@ export function lbrn2ToSvg(project: LightBurnProjectFile): string {
     minY = Infinity,
     maxX = -Infinity,
     maxY = -Infinity;
-  for (const shape of shapes as Lbrn2Shape[]) {
+  for (const shape of shapes) {
     const bounds = getTransformedBounds(shape);
     if (bounds) {
       minX = Math.min(minX, bounds.minX);

@@ -4,6 +4,7 @@ import type {
   Lbrn2Ellipse,
   Lbrn2Path,
   Lbrn2XForm,
+  Lbrn2Bitmap,
 } from "./lbrn2Types";
 
 // Compose two transforms
@@ -68,7 +69,7 @@ export function getTransformedBounds(
   let pointsToBound: { x: number; y: number }[] = [];
 
   if (shape.Type === "Rect") {
-    const rect = shape as Lbrn2Rect;
+    const rect = shape;
     const w = rect.W / 2,
       h = rect.H / 2;
     pointsToBound.push(
@@ -78,7 +79,7 @@ export function getTransformedBounds(
       { x: -w, y: h }
     );
   } else if (shape.Type === "Ellipse") {
-    const ellipse = shape as Lbrn2Ellipse;
+    const ellipse = shape;
     pointsToBound.push({ x: 0, y: 0 });
     const localPoints = [
       { x: ellipse.Rx, y: 0 },
@@ -95,7 +96,7 @@ export function getTransformedBounds(
     }
     pointsToBound.push(...localPoints);
   } else if (shape.Type === "Path") {
-    const path = shape as Lbrn2Path;
+    const path = shape;
     if (!path.parsedVerts || !path.PrimList) return null;
 
     // Inline tokenizePrimList logic (to avoid circular dep)
@@ -201,8 +202,18 @@ export function getTransformedBounds(
     if (pointsToBound.length === 0 && path.parsedVerts.length > 0) {
       pointsToBound.push(...path.parsedVerts);
     }
+  } else if (shape.Type === "Bitmap") {
+    const bitmap = shape;
+    const w = bitmap.W / 2,
+      h = bitmap.H / 2;
+    pointsToBound.push(
+      { x: -w, y: -h },
+      { x: w, y: -h },
+      { x: w, y: h },
+      { x: -w, y: h }
+    );
   } else if (shape.Type === "Group") {
-    const group = shape as any;
+    const group = shape;
     if (!group.Children || group.Children.length === 0) return null;
 
     let combinedBounds: {

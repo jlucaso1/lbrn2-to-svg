@@ -62,7 +62,22 @@ export interface Lbrn2Group extends Lbrn2ShapeBase {
   Children: Lbrn2Shape[];
 }
 
-export type Lbrn2Shape = Lbrn2Rect | Lbrn2Ellipse | Lbrn2Path | Lbrn2Group;
+export interface Lbrn2Bitmap extends Lbrn2ShapeBase {
+  Type: "Bitmap";
+  W: number;
+  H: number;
+  Data: string; // Base64 encoded image data
+  File?: string;
+  Gamma?: number;
+  Contrast?: number;
+  Brightness?: number;
+  EnhanceAmount?: number;
+  EnhanceRadius?: number;
+  EnhanceDenoise?: number;
+  SourceHash?: number;
+}
+
+export type Lbrn2Shape = Lbrn2Rect | Lbrn2Ellipse | Lbrn2Path | Lbrn2Group | Lbrn2Bitmap;
 
 export interface LightBurnProjectFile {
   LightBurnProject: {

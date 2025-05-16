@@ -47,12 +47,12 @@ function parseXFormString(xformStr: string): Lbrn2XForm {
   }
   // Type assertion is safe due to above check
   return {
-    a: parts[0] as number,
-    b: parts[1] as number,
-    c: parts[2] as number,
-    d: parts[3] as number,
-    e: parts[4] as number,
-    f: parts[5] as number,
+    a: parts[0]!,
+    b: parts[1]!,
+    c: parts[2]!,
+    d: parts[3]!,
+    e: parts[4]!,
+    f: parts[5]!,
   };
 }
 
@@ -325,21 +325,24 @@ export function parseLbrn2(xmlString: string): LightBurnProjectFile {
           const backupData = shape.BackupPath;
           shape = {
             Type: "Path",
-            CutIndex: backupData.CutIndex !== undefined ? backupData.CutIndex : shape.CutIndex,
+            CutIndex:
+              backupData.CutIndex !== undefined
+                ? backupData.CutIndex
+                : shape.CutIndex,
             XFormVal: backupData.XForm,
             XForm: parseXFormString(backupData.XForm),
             VertList: backupData.VertList,
             PrimList: backupData.PrimList,
           };
         }
-      
+
         // Parse XForm for current shape
         if (shape.XFormVal) {
           shape.XForm = parseXFormString(shape.XFormVal);
         } else if (shape.XForm && typeof shape.XForm === "string") {
           shape.XForm = parseXFormString(shape.XForm as unknown as string);
         }
-      
+
         if (shape.Type === "Path") {
           if (shape.VertList && typeof shape.VertList === "string") {
             shape.parsedVerts = parseVertListString(shape.VertList);
@@ -366,23 +369,24 @@ export function parseLbrn2(xmlString: string): LightBurnProjectFile {
             // Fallback: treat as single child
             childrenArr = [shape.Children];
           }
-          shape.Children = childrenArr
-            .map(parseShapeRecursive)
-            .filter(Boolean); // Remove null children
+          shape.Children = childrenArr.map(parseShapeRecursive).filter(Boolean); // Remove null children
           // Skip Group shapes without XForm
           if (!shape.XForm) return null;
-        } else if ((shape.Type === "Rect" || shape.Type === "Ellipse") && !shape.XForm) {
+        } else if (
+          (shape.Type === "Rect" || shape.Type === "Ellipse") &&
+          !shape.XForm
+        ) {
           // Skip basic shapes without XForm
           return null;
         } else if (shape.Type === "Text") {
           // If it's still a Text shape, it means no usable BackupPath; let SVG converter skip it.
         }
-      
+
         // Ensure all non-Text shapes have a parsed XForm
         if (shape.Type !== "Text" && !shape.XForm) {
           return null;
         }
-      
+
         return shape;
       };
 
