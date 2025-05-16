@@ -376,7 +376,11 @@ export function parseLbrn2(xmlString: string): LightBurnProjectFile {
           ) {
             // This shape defines the path geometry
             shape.parsedVerts = parseVertListString(shape.VertList);
-            shape.parsedPrimitives = parsePrimListToIR(shape.PrimList);
+            if (shape.PrimList === "LineClosed") {
+              shape.parsedPrimitives = [];
+            } else {
+              shape.parsedPrimitives = parsePrimListToIR(shape.PrimList);
+            }
 
             if (cacheKey) {
               cache.set(cacheKey, {

@@ -141,6 +141,7 @@ describe("LBRN2 to SVG Converter", () => {
     "word",
     "image",
     "crucifix",
+    "k",
   ];
 
   for (const tc of testCases) {

@@ -45,7 +45,53 @@ export function tokenizePrimList(primList: string): PrimToken[] {
 }
 
 export function parsePathPrimitives(path: Lbrn2Path, log: string[]): string {
-  if (!path.parsedPrimitives || !path.parsedVerts || path.parsedVerts.length === 0) {
+  // Handle LineClosed explicitly
+  if (
+    path.PrimList === "LineClosed" &&
+    path.parsedVerts &&
+    path.parsedVerts.length > 0
+  ) {
+    const verts = path.parsedVerts;
+    if (verts.length < 1) {
+      log.push(
+        `Path with 'LineClosed' has 0 vertices, skipping: ${JSON.stringify(
+          path
+        )}`
+      );
+      return "";
+    }
+    if (verts.length === 1 && verts[0]) {
+      return `M${F(verts[0].x)},${F(verts[0].y)}Z`;
+    }
+    if (verts.length > 0 && !verts[0]) {
+      log.push(
+        `Path with 'LineClosed' has nullish first vertex, skipping: ${JSON.stringify(
+          path
+        )}`
+      );
+      return "";
+    }
+    let d = `M${F(verts[0]!.x)},${F(verts[0]!.y)}`;
+    for (let i = 1; i < verts.length; i++) {
+      if (verts[i]) {
+        d += ` L${F(verts[i]!.x)},${F(verts[i]!.y)}`;
+      } else {
+        log.push(
+          `Path with 'LineClosed' encountered a nullish vertex at index ${i}, stopping line generation for this path.`
+        );
+        break;
+      }
+    }
+    d += "Z";
+    return d;
+  }
+
+  // Existing logic for explicit primitives
+  if (
+    !path.parsedPrimitives ||
+    !path.parsedVerts ||
+    path.parsedVerts.length === 0
+  ) {
     log.push(
       `Path ${
         path.PrimList || "PrimList missing"
