@@ -1,6 +1,6 @@
 {
   "name": "lbrn2-to-svg",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "A library and CLI to parse LightBurn LBRN2 files and convert them to SVG.",
   "type": "module",
   "exports": {
