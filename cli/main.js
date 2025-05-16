@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import { readFileSync, writeFileSync } from "fs";
 import { lbrn2ToSvg, parseLbrn2 } from "lbrn2-to-svg";
 
